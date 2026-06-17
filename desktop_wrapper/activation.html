@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UltimatePOS Premium Activation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Hind:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', 'Hind', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #1e1233 0%, #0a0514 100%);
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            width: 460px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            text-align: center;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, #00f2fe, #4facfe, #8a2387, #e94057, #f27121);
+            background-size: 400% 400%;
+            z-index: -1;
+            border-radius: 25px;
+            opacity: 0.15;
+            animation: gradient-glow 15s ease infinite;
+        }
+
+        @keyframes gradient-glow {
+            0% { background-position: 0% 50% }
+            50% { background-position: 100% 50% }
+            100% { background-position: 0% 50% }
+        }
+
+        .logo-box {
+            margin-bottom: 25px;
+        }
+
+        .logo-box h2 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(120deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .logo-box p {
+            color: #a0aec0;
+            font-size: 0.95rem;
+            margin: 5px 0 0 0;
+        }
+
+        .info-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: left;
+        }
+
+        .info-card label {
+            display: block;
+            font-size: 0.75rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .machine-id-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .machine-id {
+            font-family: monospace;
+            font-size: 1.15rem;
+            color: #00f2fe;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        .copy-btn {
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            color: #00f2fe;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: rgba(0, 242, 254, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: #a0aec0;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #ffffff;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea:focus {
+            border-color: #4facfe;
+            box-shadow: 0 0 10px rgba(79, 172, 254, 0.3);
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            border: none;
+            border-radius: 12px;
+            color: #ffffff;
+            padding: 14px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(0, 242, 254, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(0, 242, 254, 0.45);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            color: #fc8181;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            min-height: 20px;
+            transition: all 0.2s ease;
+            font-weight: 600;
+        }
+
+        .success-message {
+            color: #68d391;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+
+        /* Subtle ambient lights */
+        .ambient-light {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            filter: blur(120px);
+            z-index: 1;
+            opacity: 0.3;
+        }
+
+        .light-1 {
+            background: #8a2387;
+            top: -100px;
+            left: -100px;
+        }
+
+        .light-2 {
+            background: #00f2fe;
+            bottom: -150px;
+            right: -100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-light light-1"></div>
+    <div class="ambient-light light-2"></div>
+
+    <div class="container">
+        <div class="logo-box">
+            <h2>UltimatePOS Premium</h2>
+            <p>மென்பொருள் ஆக்டிவேஷன் (Software Activation)</p>
+        </div>
+
+        <div class="info-card">
+            <label>மெஷின் ஐடி (Machine ID)</label>
+            <div class="machine-id-container">
+                <span class="machine-id" id="machine-id">LOADING-ID-1234</span>
+                <button class="copy-btn" id="copy-btn">நகலெடு</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="license-key">லைசென்ஸ் சாவி (License Key)</label>
+            <textarea id="license-key" placeholder="இங்கே லைசென்ஸ் கீ-ஐ ஒட்டவும் (Paste your license key here)..."></textarea>
+        </div>
+
+        <button class="btn-submit" id="activate-btn">செயல்படுத்து (Activate)</button>
+        <div class="error-message" id="message-box"></div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const machineIdEl = document.getElementById('machine-id');
+        const copyBtn = document.getElementById('copy-btn');
+        const licenseKeyEl = document.getElementById('license-key');
+        const activateBtn = document.getElementById('activate-btn');
+        const messageBox = document.getElementById('message-box');
+
+        // Fetch Machine ID on load
+        try {
+            const machineId = ipcRenderer.sendSync('get-machine-id');
+            machineIdEl.innerText = machineId;
+        } catch (e) {
+            machineIdEl.innerText = "ERROR-OBTAINING-ID";
+        }
+
+        // Copy Machine ID to clipboard
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = machineIdEl.innerText;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = "நகலெடுக்கப்பட்டது!";
+                copyBtn.style.background = "rgba(104, 211, 145, 0.1)";
+                copyBtn.style.color = "#68d391";
+                copyBtn.style.borderColor = "rgba(104, 211, 145, 0.2)";
+                
+                setTimeout(() => {
+                    copyBtn.innerText = originalText;
+                    copyBtn.style.background = "rgba(0, 242, 254, 0.1)";
+                    copyBtn.style.color = "#00f2fe";
+                    copyBtn.style.borderColor = "rgba(0, 242, 254, 0.2)";
+                }, 2000);
+            });
+        });
+
+        // Submit License Key
+        activateBtn.addEventListener('click', () => {
+            const key = licenseKeyEl.value.trim();
+            if (!key) {
+                messageBox.className = "error-message";
+                messageBox.innerText = "தயவுசெய்து லைசென்ஸ் சாவியை உள்ளிடவும்!";
+                return;
+            }
+
+            activateBtn.innerText = "சரிபார்க்கப்படுகிறது...";
+            activateBtn.disabled = true;
+
+            // Send to main process
+            ipcRenderer.send('submit-license', key);
+        });
+
+        // Listen for validation response
+        ipcRenderer.on('license-result', (event, response) => {
+            activateBtn.disabled = false;
+            activateBtn.innerText = "செயல்படுத்து (Activate)";
+
+            if (response.success) {
+                messageBox.className = "success-message";
+                messageBox.innerText = "வெற்றிகரமாக செயல்படுத்தப்பட்டது! திறக்கிறது...";
+                licenseKeyEl.disabled = true;
+                activateBtn.disabled = true;
+            } else {
+                messageBox.className = "error-message";
+                messageBox.innerText = "பிழை: " + response.reason;
+            }
+        });
+    </script>
+</body>
+</html>
