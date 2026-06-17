@@ -1,0 +1,45 @@
+{
+  "name": "ultimate-pos-desktop",
+  "version": "7.0.0",
+  "description": "Ultimate POS Standalone Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "node obfuscate.js && electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^25.3.0",
+    "electron-builder": "^24.6.3"
+  },
+  "build": {
+    "appId": "com.ultimatepos.desktop",
+    "productName": "UltimatePOS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "splash.html",
+      "license_verify.js",
+      "backup.js",
+      "activation.html"
+    ],
+    "extraResources": [
+      "bin/**/*",
+      "src/**/*",
+      ".env.desktop"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    }
+  }
+}

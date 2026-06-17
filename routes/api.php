@@ -13,6 +13,12 @@ use Illuminate\Http\Request;
 |
 */
 
+use App\Http\Controllers\SyncController;
+
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::post('/sync/push', [SyncController::class, 'push']);
+Route::get('/sync/pull', [SyncController::class, 'pull']);
+Route::post('/sync/local-trigger', [SyncController::class, 'syncLocal']);
