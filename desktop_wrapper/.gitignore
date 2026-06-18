@@ -1,5 +1,0 @@
-# Git ignore settings for desktop wrapper
-node_modules/
-dist/
-bin/
-src/

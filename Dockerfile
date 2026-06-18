@@ -1,7 +1,4 @@
-FROM php:8.1-fpm
-
-# Set working directory
-WORKDIR /var/www
+FROM php:8.1-apache
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -14,27 +11,45 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libzip-dev \
     libjpeg-dev \
-    libfreetype6-dev
+    libfreetype6-dev \
+    nano
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip xml
 
-# Get latest Composer
+# Enable Apache rewrite module
+RUN a2enmod rewrite
+
+# Change Apache document root to Laravel public folder
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy existing application directory contents
-COPY . /var/www
+# Copy application files
+COPY . .
 
-# Copy existing application directory permissions
-COPY --chown=www-data:www-data . /var/www
+# Adjust PHP custom configurations
+RUN echo "memory_limit=512M" > /usr/local/etc/php/conf.d/custom.ini \
+    && echo "upload_max_filesize=100M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "post_max_size=100M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "max_execution_time=600" >> /usr/local/etc/php/conf.d/custom.ini
 
-# Change current user to www
-USER www-data
+# Set permissions for Laravel
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
 
-# Expose port 9000 and start php-fpm server
-EXPOSE 9000
-CMD ["php-fpm"]
+# Expose port 80
+EXPOSE 80
+
+CMD ["apache2-foreground"]

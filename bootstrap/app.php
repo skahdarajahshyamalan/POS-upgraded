@@ -52,41 +52,4 @@ $app->singleton(
 |
 */
 
-/*
-|--------------------------------------------------------------------------
-| Redirect Storage Path for Desktop App to avoid Program Files EPERM issues
-|--------------------------------------------------------------------------
-*/
-$isDesktop = false;
-$envPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
-if (is_file($envPath)) {
-    $envContent = file_get_contents($envPath);
-    if (strpos($envContent, 'IS_DESKTOP_APP=true') !== false) {
-        $isDesktop = true;
-    }
-}
-
-if ($isDesktop || getenv('IS_DESKTOP_APP') === 'true' || (isset($_ENV['IS_DESKTOP_APP']) && $_ENV['IS_DESKTOP_APP'] === 'true')) {
-    $appDataPath = getenv('APPDATA') . DIRECTORY_SEPARATOR . 'ultimate-pos-desktop' . DIRECTORY_SEPARATOR . 'storage';
-    
-    $subDirs = [
-        '',
-        DIRECTORY_SEPARATOR . 'logs',
-        DIRECTORY_SEPARATOR . 'framework',
-        DIRECTORY_SEPARATOR . 'framework' . DIRECTORY_SEPARATOR . 'views',
-        DIRECTORY_SEPARATOR . 'framework' . DIRECTORY_SEPARATOR . 'sessions',
-        DIRECTORY_SEPARATOR . 'framework' . DIRECTORY_SEPARATOR . 'cache',
-        DIRECTORY_SEPARATOR . 'framework' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'data',
-    ];
-    
-    foreach ($subDirs as $dir) {
-        $path = $appDataPath . $dir;
-        if (!is_dir($path)) {
-            mkdir($path, 0777, true);
-        }
-    }
-    
-    $app->useStoragePath($appDataPath);
-}
-
 return $app;

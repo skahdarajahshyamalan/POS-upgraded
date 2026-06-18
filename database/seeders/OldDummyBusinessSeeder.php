@@ -96,7 +96,7 @@ class OldDummyBusinessSeeder extends Seeder
 					(21, 'Food & Grocery', 1, NULL, 0, 1, '2018-01-06 11:01:35', '2018-01-06 11:01:35')");
 
         DB::insert("INSERT INTO contacts (id, business_id, type, supplier_business_name, name, 
-        			tax_number, city, state, country, address_line_1, mobile, landline, 
+        			tax_number, city, state, country, landmark, mobile, landline, 
         			alternate_number, pay_term_number, pay_term_type, created_by, is_default, 
         			deleted_at, created_at, updated_at) VALUES
 					(1, 1, 'customer', NULL, 'Walk-In Customer', NULL, 'Phoenix', 'Arizona', 'USA', 'Linking Street', '(378) 400-1234', NULL, NULL, NULL, NULL, 1, 1, NULL, '2018-01-04 02:15:20', '2018-01-04 02:35:37'),

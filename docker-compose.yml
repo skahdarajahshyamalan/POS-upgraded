@@ -1,62 +1,48 @@
 version: '3.8'
-services:
 
-  # PHP Application
+services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ultimate-pos-app
-    container_name: ultimate-pos-app
-    restart: unless-stopped
-    tty: true
-    environment:
-      SERVICE_NAME: app
-      SERVICE_TAGS: dev
-    working_dir: /var/www
-    volumes:
-      - ./:/var/www
-      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
-    networks:
-      - pos-network
-
-  # Nginx Web Server
-  web:
-    image: nginx:alpine
-    container_name: ultimate-pos-web
-    restart: unless-stopped
+    container_name: pos_app
+    restart: always
     ports:
       - "8000:80"
     volumes:
-      - ./:/var/www
-      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
-    networks:
-      - pos-network
+      - .:/var/www/html
     depends_on:
-      - app
+      - db
 
-  # MySQL Database
   db:
     image: mysql:8.0
-    container_name: ultimate-pos-db
-    restart: unless-stopped
-    tty: true
-    ports:
-      - "33066:3306"
+    container_name: pos_db
+    restart: always
     environment:
-      MYSQL_DATABASE: ultimate_pos
+      MYSQL_DATABASE: atpoxise_posvtventsys
       MYSQL_USER: pos_user
       MYSQL_PASSWORD: pos_password
       MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
     volumes:
-      - dbdata:/var/lib/mysql
-    networks:
-      - pos-network
+      - db_data:/var/lib/mysql
+      - ./atpoxise_posvtventsys.sql:/docker-entrypoint-initdb.d/atpoxise_posvtventsys.sql
 
-networks:
-  pos-network:
-    driver: bridge
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: pos_phpmyadmin
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: pos_user
+      PMA_PASSWORD: pos_password
+      MYSQL_ROOT_PASSWORD: root_password
+    depends_on:
+      - db
 
 volumes:
-  dbdata:
-    driver: local
+  db_data:

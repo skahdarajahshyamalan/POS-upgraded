@@ -174,7 +174,7 @@ class InstallController extends Controller
             $this->outputLog = new BufferedOutput;
 
             $input = $request->only(['APP_NAME', 'APP_TITLE', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD', 'ENVATO_PURCHASE_CODE',
-                'ENVATO_EMAIL', 'ENVATO_USERNAME', 'MAIL_MAILER',
+                'MAIL_MAILER',
                 'MAIL_FROM_ADDRESS', 'MAIL_FROM_NAME', 'MAIL_HOST', 'MAIL_PORT', 'MAIL_ENCRYPTION',
                 'MAIL_USERNAME', 'MAIL_PASSWORD', ]);
 
@@ -191,12 +191,6 @@ class InstallController extends Controller
                 return redirect()
                     ->back()
                     ->with('error', $msg);
-            }
-
-            //pos boot
-            $return = pos_boot($input['APP_URL'], __DIR__, $input['ENVATO_PURCHASE_CODE'], $input['ENVATO_EMAIL'], $input['ENVATO_USERNAME']);
-            if (! empty($return)) {
-                return $return;
             }
 
             //Check for activation key
@@ -323,12 +317,6 @@ class InstallController extends Controller
 
             ini_set('max_execution_time', 0);
             ini_set('memory_limit', '512M');
-
-            $input = $request->only(['ENVATO_PURCHASE_CODE', 'ENVATO_USERNAME', 'ENVATO_EMAIL']);
-            $return = pos_boot(config('app.url'), __DIR__, $input['ENVATO_PURCHASE_CODE'], $input['ENVATO_EMAIL'], $input['ENVATO_USERNAME'], 1);
-            if (! empty($return)) {
-                return $return;
-            }
 
             //Static version value is passed for 1.2 version.
             if ($version == 1.2) {
