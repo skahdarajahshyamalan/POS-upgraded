@@ -528,3 +528,12 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone'])
     Route::get('/show-notification/{id}', [HomeController::class, 'showNotification']);
     Route::post('/sell/check-invoice-number', [SellController::class, 'checkInvoiceNumber']);
 });
+
+// Custom fallback route to serve media uploads from the redirected AppData storage path
+Route::get('storage/{path}', function ($path) {
+    $storagePath = storage_path('app/public/' . $path);
+    if (file_exists($storagePath)) {
+        return response()->file($storagePath);
+    }
+    abort(404);
+})->where('path', '.*');

@@ -66,4 +66,11 @@ foreach ($Folder in $StorageFolders) {
 # Copy desktop env configuration to src/.env
 Copy-Item -Path (Join-Path $PSScriptRoot ".env.desktop") -Destination (Join-Path $SrcDir ".env") -Force
 
+# Delete the public/storage symlink in the destination folder to avoid electron-builder packing failures
+$DestSymlink = Join-Path $SrcDir "public/storage"
+if (Test-Path $DestSymlink) {
+    Write-Host "Removing public/storage symlink from destination..."
+    Remove-Item -Force $DestSymlink
+}
+
 Write-Host "Laravel source copied successfully!"
