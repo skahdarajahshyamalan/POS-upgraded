@@ -1,0 +1,19 @@
+# Exclude desktop wrapper environment
+desktop_wrapper/
+
+# Exclude git and dev files
+.git
+.gitignore
+docker-compose.yml
+Dockerfile
+
+# Exclude package management folders
+node_modules/
+vendor/
+
+# Exclude Laravel framework storage logs/cache
+storage/logs/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+bootstrap/cache/*
