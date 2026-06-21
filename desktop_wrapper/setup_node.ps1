@@ -10,6 +10,11 @@ $NodeDestDir = Join-Path $BinDir "node"
 $NodeZipUrl = "https://nodejs.org/dist/v18.16.0/node-v18.16.0-win-x64.zip"
 $NodeZipPath = Join-Path $BinDir "node.zip"
 
+# Create bin folder if it doesn't exist
+if (-not (Test-Path $BinDir)) {
+    New-Item -ItemType Directory -Path $BinDir | Out-Null
+}
+
 if (-not (Test-Path $NodeDestDir)) {
     Write-Host "Downloading portable Node.js v18.16.0..."
     Invoke-WebRequest -Uri $NodeZipUrl -OutFile $NodeZipPath -UserAgent "Mozilla/5.0"

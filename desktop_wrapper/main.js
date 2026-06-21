@@ -360,15 +360,8 @@ ipcMain.on('submit-license', (event, licenseKey) => {
 
 app.on('ready', () => {
     createSplash();
-    
-    const licenseCheck = checkLicense();
-    if (licenseCheck.success) {
-        updateStatus('Starting Services...');
-        startAppServices();
-    } else {
-        console.log("License check failed:", licenseCheck.reason);
-        createActivationWindow();
-    }
+    updateStatus('Starting Services...');
+    startAppServices();
 });
 
 app.on('window-all-closed', () => {

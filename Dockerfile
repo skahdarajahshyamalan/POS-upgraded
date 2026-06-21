@@ -45,7 +45,14 @@ RUN echo "memory_limit=512M" > /usr/local/etc/php/conf.d/custom.ini \
     && echo "max_execution_time=600" >> /usr/local/etc/php/conf.d/custom.ini
 
 # Set permissions for Laravel
-RUN chown -R www-data:www-data /var/www/html \
+RUN mkdir -p /var/www/html/storage/app/public \
+    && mkdir -p /var/www/html/storage/framework/cache/data \
+    && mkdir -p /var/www/html/storage/framework/sessions \
+    && mkdir -p /var/www/html/storage/framework/testing \
+    && mkdir -p /var/www/html/storage/framework/views \
+    && mkdir -p /var/www/html/storage/logs \
+    && mkdir -p /var/www/html/bootstrap/cache \
+    && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
