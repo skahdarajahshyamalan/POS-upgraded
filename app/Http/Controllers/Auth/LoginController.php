@@ -155,4 +155,99 @@ class LoginController extends Controller
        
     }
 
+    protected function attemptLogin(Request $request)
+    {
+        // 1. Try local authentication first
+        $localAttempt = $this->guard()->attempt(
+            $this->credentials($request), $request->filled('remember')
+        );
+
+        if ($localAttempt) {
+            return true;
+        }
+
+        // 2. If local fails, and it is a desktop app, check remote cloud authentication
+        if (config('app.env') === 'local' || env('IS_DESKTOP_APP', false)) {
+            $cloudUrl = env('CLOUD_SERVER_URL');
+            if (!empty($cloudUrl)) {
+                try {
+                    $username = $request->input($this->username());
+                    $password = $request->input('password');
+
+                    $response = \Illuminate\Support\Facades\Http::timeout(8)->post("{$cloudUrl}/api/sync/auth", [
+                        'username' => $username,
+                        'password' => $password
+                    ]);
+
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (!empty($data['success']) && !empty($data['user'])) {
+                            // Sync business first to avoid FK constraint issues
+                            if (!empty($data['business'])) {
+                                $businessData = (array)$data['business'];
+                                \DB::table('business')->updateOrInsert(['id' => $businessData['id']], $businessData);
+                            }
+
+                            // Sync user details locally
+                            $userData = (array)$data['user'];
+                            \DB::table('users')->updateOrInsert(['id' => $userData['id']], $userData);
+
+                            // Sync roles table
+                            if (!empty($data['roles'])) {
+                                foreach ($data['roles'] as $role) {
+                                    $roleArray = (array)$role;
+                                    \DB::table('roles')->updateOrInsert(['id' => $roleArray['id']], $roleArray);
+                                }
+                            }
+
+                            // Sync model roles
+                            if (!empty($data['model_roles'])) {
+                                foreach ($data['model_roles'] as $mRole) {
+                                    $mRoleArray = (array)$mRole;
+                                    \DB::table('model_has_roles')->updateOrInsert([
+                                        'role_id' => $mRoleArray['role_id'],
+                                        'model_id' => $mRoleArray['model_id'],
+                                        'model_type' => $mRoleArray['model_type']
+                                    ], $mRoleArray);
+                                }
+                            }
+
+                            // Sync permissions table
+                            if (!empty($data['permissions'])) {
+                                foreach ($data['permissions'] as $perm) {
+                                    $permArray = (array)$perm;
+                                    \DB::table('permissions')->updateOrInsert(['id' => $permArray['id']], $permArray);
+                                }
+                            }
+
+                            // Sync model permissions
+                            if (!empty($data['model_permissions'])) {
+                                foreach ($data['model_permissions'] as $mPerm) {
+                                    $mPermArray = (array)$mPerm;
+                                    \DB::table('model_has_permissions')->updateOrInsert([
+                                        'permission_id' => $mPermArray['permission_id'],
+                                        'model_id' => $mPermArray['model_id'],
+                                        'model_type' => $mPermArray['model_type']
+                                    ], $mPermArray);
+                                }
+                            }
+
+                            // Delete default seeder users for security as requested
+                            \DB::table('users')->whereIn('username', ['admin', 'cashier', 'demo-admin', 'superadmin'])->delete();
+
+                            // Try local authentication again now that the user is created locally
+                            return $this->guard()->attempt(
+                                $this->credentials($request), $request->filled('remember')
+                            );
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Remote auth failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        return false;
+    }
+
 }

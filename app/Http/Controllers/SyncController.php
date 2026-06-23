@@ -183,4 +183,58 @@ class SyncController extends Controller
             return response()->json(['success' => false, 'message' => 'Sync Error: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * REMOTE AUTH Endpoint (Runs on Cloud Server)
+     * Authenticates a user and returns user info, roles, permissions and business registration for local caching.
+     */
+    public function remoteAuth(Request $request)
+    {
+        $username = $request->input('username');
+        $password = $request->input('password');
+
+        if (empty($username) || empty($password)) {
+            return response()->json(['success' => false, 'message' => 'Username and password are required.'], 400);
+        }
+
+        // Try to authenticate using username or email
+        $fieldType = filter_var($username, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        
+        $user = \App\User::where($fieldType, $username)->first();
+
+        if ($user && \Hash::check($password, $user->password)) {
+            // Fetch business
+            $business = \DB::table('business')->where('id', $user->business_id)->first();
+            
+            // Fetch model roles
+            $modelRoles = \DB::table('model_has_roles')
+                ->where('model_id', $user->id)
+                ->where('model_type', \App\User::class)
+                ->get();
+                
+            $roleIds = $modelRoles->pluck('role_id')->toArray();
+            $roles = \DB::table('roles')->whereIn('id', $roleIds)->get();
+
+            // Fetch model permissions
+            $modelPermissions = \DB::table('model_has_permissions')
+                ->where('model_id', $user->id)
+                ->where('model_type', \App\User::class)
+                ->get();
+                
+            $permissionIds = $modelPermissions->pluck('permission_id')->toArray();
+            $permissions = \DB::table('permissions')->whereIn('id', $permissionIds)->get();
+
+            return response()->json([
+                'success' => true,
+                'user' => $user->toArray(),
+                'business' => $business,
+                'model_roles' => $modelRoles,
+                'roles' => $roles,
+                'model_permissions' => $modelPermissions,
+                'permissions' => $permissions
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid credentials.'], 401);
+    }
 }
