@@ -130,7 +130,7 @@ function launchMysqld(mysqldPath, dbDataDir, resolve, reject) {
 
 function startWebServer() {
     return new Promise((resolve, reject) => {
-        updateStatus('Starting PHP Web Server...');
+        updateStatus('Loading ..');
         const phpDir = path.join(basePath, 'bin', 'php');
         const phpPath = path.join(phpDir, 'php.exe');
         const srcDir = path.join(basePath, 'src');
