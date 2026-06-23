@@ -425,7 +425,7 @@ function checkLicense() {
 
 function getEnvValue(key, defaultValue = '') {
     try {
-        const envPath = path.join(__dirname, '.env.desktop');
+        const envPath = path.join(basePath, '.env.desktop');
         if (fs.existsSync(envPath)) {
             const content = fs.readFileSync(envPath, 'utf8');
             const lines = content.split(/\r?\n/);
