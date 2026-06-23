@@ -256,7 +256,7 @@ function createDatabase() {
 
 function runMigrationsAndSeeds() {
     return new Promise((resolve, reject) => {
-        updateStatus('Running database migrations...');
+        updateStatus('Installing local databases...');
         const phpDir = path.join(basePath, 'bin', 'php');
         const phpPath = path.join(phpDir, 'php.exe');
         const srcDir = path.join(basePath, 'src');
