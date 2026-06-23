@@ -35,9 +35,9 @@ class OldDummyBusinessSeeder extends Seeder
         DB::insert("INSERT INTO business (id, name, currency_id, start_date, tax_number_1, tax_label_1, 
         			tax_number_2, tax_label_2, default_sales_tax, default_profit_percent, owner_id, 
         			time_zone, fy_start_month, accounting_method, default_sales_discount, 
-        			sell_price_tax, logo, sku_prefix, keyboard_shortcuts, created_at, updated_at, enable_editing_product_from_purchase) VALUES
+        			sell_price_tax, logo, sku_prefix, keyboard_shortcuts, enabled_modules, created_at, updated_at, enable_editing_product_from_purchase) VALUES
 					(1, 'Awesome Shop', 2, '2018-01-01', '3412569900', 'GSTIN', NULL, NULL, NULL, 25, 1, 
-					'America/Phoenix', 1, 'fifo', '10.00', 'includes', NULL, 'AS', '$shortcuts', 
+					'America/Phoenix', 1, 'fifo', '10.00', 'includes', NULL, 'AS', '$shortcuts', '[\"purchases\", \"add_sale\", \"pos_sale\", \"stock_transfers\", \"stock_adjustment\", \"expenses\"]', 
 					'2018-01-04 07:45:19', '2018-01-04 07:47:08', 1)");
 
         DB::insert("INSERT INTO business_locations (id, business_id, name, landmark, country, state, 

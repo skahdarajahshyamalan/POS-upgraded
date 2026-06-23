@@ -106,14 +106,31 @@
     @endif
         </div>
         <div class="col-md-4">
+            <style>
+                #username, #password {
+                    background-color: rgba(255, 255, 255, 0.08) !important;
+                    color: #ffffff !important;
+                    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                    width: 100% !important;
+                }
+                #username::placeholder, #password::placeholder {
+                    color: rgba(255, 255, 255, 0.4) !important;
+                }
+                #username:focus, #password:focus {
+                    background-color: rgba(255, 255, 255, 0.12) !important;
+                    border-color: #818cf8 !important;
+                    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2) !important;
+                    outline: none !important;
+                }
+            </style>
             <div
-                class="tw-p-5 md:tw-p-6 tw-mb-4 tw-rounded-2xl tw-transition-all tw-duration-200 tw-bg-white tw-shadow-sm tw-ring-1 tw-ring-gray-200">
-                <div class="tw-flex tw-flex-col tw-gap-4 tw-dw-rounded-box tw-dw-p-6 tw-dw-max-w-md">
-                    <div class="tw-flex tw-items-center tw-flex-col">
-                        <h1 class="tw-text-lg md:tw-text-xl tw-font-semibold tw-text-[#1e1e1e]">
+                class="tw-p-6 md:tw-p-8 tw-mb-4 tw-rounded-3xl tw-transition-all tw-duration-300 tw-bg-white/10 tw-backdrop-blur-xl tw-shadow-2xl tw-border tw-border-white/20">
+                <div class="tw-flex tw-flex-col tw-gap-4 tw-dw-rounded-box tw-dw-max-w-md">
+                    <div class="tw-flex tw-items-center tw-flex-col tw-mb-2">
+                        <h1 class="tw-text-xl md:tw-text-2xl tw-font-bold tw-text-white">
                             @lang('lang_v1.welcome_back')
                         </h1>
-                        <h2 class="tw-text-sm tw-font-medium tw-text-gray-500">
+                        <h2 class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-white/60 tw-mt-1">
                             @lang('lang_v1.login_to_your') {{ config('app.name', 'ultimatePOS') }}
                         </h2>
                     </div>
@@ -124,13 +141,13 @@
                             <label class="tw-dw-form-control">
                                 <div class="tw-dw-label">
                                     <span
-                                        class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-black">@lang('lang_v1.username')</span>
+                                        class="tw-text-xs md:tw-text-sm tw-font-semibold tw-text-white/80">@lang('lang_v1.username')</span>
                                 </div>
 
                                 <input
-                                    class="tw-border tw-border-[#D1D5DA] tw-outline-none tw-h-12 tw-bg-transparent tw-rounded-lg tw-px-3 tw-font-medium tw-text-black placeholder:tw-text-gray-500 placeholder:tw-font-medium"
+                                    class="tw-border tw-border-white/20 tw-outline-none tw-h-12 tw-bg-white/5 tw-rounded-xl tw-px-3 tw-font-medium tw-text-white placeholder:tw-text-white/30 focus:tw-border-indigo-400 focus:tw-ring-2 focus:tw-ring-indigo-400/20 tw-transition-all"
                                     name="username" required autofocus placeholder="@lang('lang_v1.username')"
-                                    data-last-active-input="" id="username" type="text" name="username"
+                                    data-last-active-input="" id="username" type="text"
                                     value="{{ $username }}" />
                                 @if ($errors->has('username'))
                                     <span class="help-block">
@@ -144,26 +161,28 @@
                             <label class="tw-dw-form-control">
                                 <div class="tw-dw-label">
                                     <span
-                                        class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-black">@lang('lang_v1.password')</span>
+                                        class="tw-text-xs md:tw-text-sm tw-font-semibold tw-text-white/80">@lang('lang_v1.password')</span>
                                     @if (config('app.env') != 'demo')
                                         <a href="{{ route('password.request') }}"
-                                            class="tw-text-xs md:tw-text-sm tw-font-medium tw-bg-gradient-to-r tw-from-indigo-500 tw-to-blue-500 tw-inline-block tw-text-transparent tw-bg-clip-text hover:tw-text-[#467BF5]"
+                                            class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-white/50 hover:tw-text-white tw-transition-colors"
                                             tabindex="-1">@lang('lang_v1.forgot_your_password')</a>
                                     @endif
                                 </div>
 
-                                <input
-                                    class="tw-border tw-border-[#D1D5DA] tw-outline-none tw-h-12 tw-bg-transparent tw-rounded-lg tw-px-3 tw-font-medium tw-text-black placeholder:tw-text-gray-500 placeholder:tw-font-medium"
-                                    id="password" type="password" name="password" value="{{ $password }}" required
-                                    placeholder="@lang('lang_v1.password')" />
-                                <button type="button" id="show_hide_icon" class="show_hide_icon"
-                                    style="position: absolute; top:48px;right:5px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-eye tw-w-6" viewBox="0 0 24 24" stroke-width="1.5" stroke="#000000" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                                        <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
-                                        <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
-                                    </svg>
-                                </button>
+                                <div style="position: relative;" class="tw-w-full">
+                                    <input
+                                        class="tw-border tw-border-white/20 tw-outline-none tw-h-12 tw-bg-white/5 tw-rounded-xl tw-px-3 tw-w-full tw-font-medium tw-text-white placeholder:tw-text-white/30 focus:tw-border-indigo-400 focus:tw-ring-2 focus:tw-ring-indigo-400/20 tw-transition-all"
+                                        id="password" type="password" name="password" value="{{ $password }}" required
+                                        placeholder="@lang('lang_v1.password')" style="padding-right: 45px !important;" />
+                                    <button type="button" id="show_hide_icon" class="show_hide_icon"
+                                        style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 10; background: transparent; border: none; outline: none; padding: 0; display: flex; align-items: center;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-eye tw-w-6" viewBox="0 0 24 24" stroke-width="1.5" stroke="#ffffff" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                            <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+                                            <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </label>
                             @if ($errors->has('password'))
                                 <span class="help-block">
@@ -176,9 +195,9 @@
                         <div class="tw-dw-form-control">
                             <label class="tw-dw-cursor-pointer tw-dw-label tw-self-start tw-gap-2">
                                 <input type="checkbox" name="remember" {{ old('remember') ? 'checked' : '' }}
-                                    class="tw-dw-checkbox">
+                                    class="tw-dw-checkbox tw-border-white/20 tw-bg-white/5">
                                 <span
-                                    class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-black tw-mt-[0.2rem]">@lang('lang_v1.remember_me')</span>
+                                    class="tw-text-xs md:tw-text-sm tw-font-medium tw-text-white/80 tw-mt-[0.2rem]">@lang('lang_v1.remember_me')</span>
                             </label>
                         </div>
                         @if(config('constants.enable_recaptcha'))
@@ -194,7 +213,7 @@
                         </div>
                         @endif
                         <button type="submit"
-                            class="tw-bg-gradient-to-r tw-from-indigo-500 tw-to-blue-500 tw-h-12 tw-rounded-xl tw-text-sm md:tw-text-base tw-text-white tw-font-semibold tw-w-full tw-max-w-full mt-2 hover:tw-from-indigo-600 hover:tw-to-blue-600 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-blue-500 focus:tw-ring-offset-2 active:tw-from-indigo-700 active:tw-to-blue-700">
+                            class="tw-bg-gradient-to-r tw-from-indigo-500 tw-to-blue-500 tw-h-12 tw-rounded-xl tw-text-sm md:tw-text-base tw-text-white tw-font-bold tw-w-full tw-max-w-full mt-4 tw-transition-all tw-duration-200 hover:tw-from-indigo-600 hover:tw-to-blue-600 tw-shadow-lg tw-shadow-indigo-500/20 hover:tw-shadow-indigo-500/30 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-blue-500 focus:tw-ring-offset-2 active:tw-from-indigo-700 active:tw-to-blue-700">
                             @lang('lang_v1.login')
                         </button>
                     </form>
@@ -206,9 +225,9 @@
                             <!-- Register Url -->
                             @if (config('constants.allow_registration'))
                                 <a href="{{ route('business.getRegister') }}@if (!empty(request()->lang)) {{ '?lang=' . request()->lang }} @endif"
-                                    class="tw-text-sm tw-font-medium tw-text-gray-500 hover:tw-text-gray-500 tw-mt-2">{{ __('business.not_yet_registered') }}
+                                    class="tw-text-sm tw-font-medium tw-text-white/50 hover:tw-text-white tw-mt-2">{{ __('business.not_yet_registered') }}
                                     <span
-                                        class="tw-text-sm tw-font-medium tw-bg-gradient-to-r tw-from-indigo-500 tw-to-blue-500 tw-inline-block tw-text-transparent tw-bg-clip-text hover:tw-text-[#467BF5] hover:tw-underline">{{ __('business.register_now') }}</span></a>
+                                        class="tw-text-sm tw-font-medium tw-bg-gradient-to-r tw-from-indigo-400 tw-to-blue-400 tw-inline-block tw-text-transparent tw-bg-clip-text hover:tw-text-[#467BF5] hover:tw-underline">{{ __('business.register_now') }}</span></a>
                             @endif
                         @endif
                     </div>
@@ -249,3 +268,4 @@
         })
     </script>
 @endsection
+{{-- dev auto-sync test 2 --}}

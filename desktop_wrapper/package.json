@@ -21,6 +21,7 @@
     "files": [
       "main.js",
       "package.json",
+      "preload_status.js",
       "splash.html",
       "license_verify.js",
       "backup.js",

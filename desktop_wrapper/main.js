@@ -2,6 +2,33 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
+
+// Ignore certificate errors globally to avoid blank page on SSL validation issues
+app.commandLine.appendSwitch('ignore-certificate-errors');
+
+// File logging setup
+const logPath = path.join(app.getPath('userData'), 'app.log');
+function logToFile(type, message) {
+    try {
+        const timestamp = new Date().toISOString();
+        fs.appendFileSync(logPath, `[${timestamp}] [${type}] ${message}\n`, 'utf8');
+    } catch (e) {
+        // ignore
+    }
+}
+const originalLog = console.log;
+const originalError = console.error;
+console.log = function(...args) {
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+    logToFile('INFO', message);
+    originalLog.apply(console, args);
+};
+console.error = function(...args) {
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+    logToFile('ERROR', message);
+    originalError.apply(console, args);
+};
+
 const { getMachineId, verifyLicenseKey } = require('./license_verify');
 const licensePath = path.join(app.getPath('userData'), 'license.key');
 
@@ -149,11 +176,33 @@ function createMainWindow() {
         show: false,
         webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload_status.js')
         }
     });
 
-    mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
+    const appUrl = getEnvValue('APP_URL', `http://127.0.0.1:${PORT}`);
+    
+    // Log load failures
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error(`[Main Process] Failed to load URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`);
+    });
+
+    mainWindow.loadURL(appUrl);
+
+    if (!app.isPackaged) {
+        mainWindow.webContents.openDevTools();
+    }
+
+    // Send app packaging status once DOM finishes loading
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('app-info', { isPackaged: app.isPackaged });
+    });
+
+    // Forward renderer console messages to main process terminal stdout
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.log(`[Renderer Console] ${message} (at ${path.basename(sourceId)}:${line})`);
+    });
 
     mainWindow.once('ready-to-show', () => {
         if (splashWindow && !splashWindow.isDestroyed()) {
@@ -305,17 +354,65 @@ function checkLicense() {
     return { success: true, payload: result.payload };
 }
 
+function getEnvValue(key, defaultValue = '') {
+    try {
+        const envPath = path.join(__dirname, '.env.desktop');
+        if (fs.existsSync(envPath)) {
+            const content = fs.readFileSync(envPath, 'utf8');
+            const lines = content.split(/\r?\n/);
+            for (const line of lines) {
+                const match = line.match(/^\s*([^#=]+)\s*=\s*(.*)$/);
+                if (match && match[1].trim() === key) {
+                    let val = match[2].trim();
+                    // Remove quotes if present
+                    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                        val = val.substring(1, val.length - 1);
+                    }
+                    return val;
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error reading .env.desktop:", e);
+    }
+    return defaultValue;
+}
+
+const DB_PORT_ENV = parseInt(getEnvValue('DB_PORT', '3307'), 10);
+const DB_HOST_ENV = getEnvValue('DB_HOST', '127.0.0.1');
+
 function startAppServices() {
-    startDatabase()
-        .then(() => createDatabase())
-        .then(() => runMigrationsAndSeeds())
+    const APP_URL_ENV = getEnvValue('APP_URL', `http://127.0.0.1:${PORT}`);
+    const isRemoteUrl = APP_URL_ENV.startsWith('http') && !APP_URL_ENV.includes('127.0.0.1') && !APP_URL_ENV.includes('localhost');
+
+    if (isRemoteUrl) {
+        console.log(`Using remote URL: ${APP_URL_ENV}. Bypassing local database and local web server startup.`);
+        createMainWindow();
+        return;
+    }
+
+    let promise = Promise.resolve();
+    
+    // Only run local DB services if database is configured to use local MariaDB (port 3307)
+    if (DB_PORT_ENV === 3307) {
+        promise = promise
+            .then(() => startDatabase())
+            .then(() => createDatabase())
+            .then(() => runMigrationsAndSeeds());
+    } else {
+        console.log(`Using external database connection: ${DB_HOST_ENV}:${DB_PORT_ENV}. Skipping local database startup and migrations.`);
+    }
+
+    promise
         .then(() => {
-            // Run backup in background on startup
-            try {
-                const { runBackup } = require('./backup');
-                runBackup();
-            } catch (err) {
-                console.error("Startup database backup failed:", err);
+            // Run backup in background on startup if local
+            if (DB_PORT_ENV === 3307) {
+                try {
+                    const { runBackup } = require('./backup');
+                    runBackup();
+                } catch (err) {
+                    console.error("Startup database backup failed:", err);
+                }
             }
             return startWebServer();
         })
@@ -358,6 +455,21 @@ ipcMain.on('submit-license', (event, licenseKey) => {
     }
 });
 
+ipcMain.on('exit-app', () => {
+    console.log('[Main Process] Received exit-app IPC message. Quitting app...');
+    try {
+        if (phpProcess) phpProcess.kill();
+    } catch (e) {
+        console.error("Error killing phpProcess on exit:", e);
+    }
+    try {
+        if (dbProcess) dbProcess.kill();
+    } catch (e) {
+        console.error("Error killing dbProcess on exit:", e);
+    }
+    app.exit(0);
+});
+
 app.on('ready', () => {
     createSplash();
     updateStatus('Starting Services...');
@@ -365,17 +477,114 @@ app.on('ready', () => {
 });
 
 app.on('window-all-closed', () => {
-    if (phpProcess) {
-        phpProcess.kill();
+    console.log('[Main Process] All windows closed. Cleaning up child processes...');
+    try {
+        if (phpProcess) phpProcess.kill();
+    } catch (e) {
+        console.error("Error killing phpProcess on window-all-closed:", e);
     }
-    if (dbProcess) {
-        dbProcess.kill();
+    try {
+        if (dbProcess) dbProcess.kill();
+    } catch (e) {
+        console.error("Error killing dbProcess on window-all-closed:", e);
     }
-    app.quit();
+    app.exit(0);
 });
 
 app.on('quit', () => {
-    if (phpProcess) phpProcess.kill();
-    if (dbProcess) dbProcess.kill();
+    console.log('[Main Process] Application quit event triggered. Performing final cleanup...');
+    try {
+        if (phpProcess) phpProcess.kill();
+    } catch (e) {
+        console.error("Error killing phpProcess on quit:", e);
+    }
+    try {
+        if (dbProcess) dbProcess.kill();
+    } catch (e) {
+        console.error("Error killing dbProcess on quit:", e);
+    }
 });
+
+// File Watcher for Development Mode
+if (!app.isPackaged) {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const parentDir = path.resolve(path.join(__dirname, '..'));
+    const srcDir = path.join(__dirname, 'src');
+    
+    console.log(`Starting development file watcher on: ${parentDir}`);
+    
+    const ignoreList = [
+        '.git',
+        'node_modules',
+        'desktop_wrapper',
+        '.composer',
+        '.config',
+        'storage/logs',
+        'storage/framework/cache/data',
+        'storage/framework/sessions',
+        'storage/framework/views'
+    ];
+    
+    function shouldIgnore(relativePath) {
+        const normalized = relativePath.replace(/\\/g, '/');
+        return ignoreList.some(ignore => {
+            return normalized === ignore || normalized.startsWith(ignore + '/');
+        });
+    }
+    
+    fs.watch(parentDir, { recursive: true }, (eventType, filename) => {
+        if (!filename) return;
+        
+        if (shouldIgnore(filename)) {
+            return;
+        }
+        
+        const sourcePath = path.join(parentDir, filename);
+        const destPath = path.join(srcDir, filename);
+        
+        // Wait a small delay to make sure file write is complete
+        setTimeout(() => {
+            try {
+                if (fs.existsSync(sourcePath)) {
+                    const stats = fs.statSync(sourcePath);
+                    if (stats.isFile()) {
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('sync-status', { status: 'syncing', file: filename });
+                        }
+                        // Ensure parent directory exists in destination
+                        const destDir = path.dirname(destPath);
+                        if (!fs.existsSync(destDir)) {
+                            fs.mkdirSync(destDir, { recursive: true });
+                        }
+                        fs.copyFileSync(sourcePath, destPath);
+                        console.log(`[Auto-Sync] Copied file: ${filename}`);
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('sync-status', { status: 'success', file: filename });
+                        }
+                    }
+                } else {
+                    // File deleted in source, delete in destination if exists
+                    if (fs.existsSync(destPath)) {
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('sync-status', { status: 'syncing', file: filename });
+                        }
+                        fs.rmSync(destPath, { force: true });
+                        console.log(`[Auto-Sync] Deleted file: ${filename}`);
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('sync-status', { status: 'success', file: filename });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`[Auto-Sync] Error syncing ${filename}:`, err.message);
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('sync-status', { status: 'error', file: filename });
+                }
+            }
+        }, 150);
+    });
+}
+
 

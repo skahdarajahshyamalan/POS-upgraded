@@ -7,13 +7,11 @@ $ProjectDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $SrcDir = Join-Path $PSScriptRoot "src"
 
 # Create src folder if it doesn't exist
-if (Test-Path $SrcDir) {
-    Write-Host "Cleaning existing src folder..."
-    Remove-Item -Recurse -Force $SrcDir
+if (-not (Test-Path $SrcDir)) {
+    New-Item -ItemType Directory -Path $SrcDir | Out-Null
 }
-New-Item -ItemType Directory -Path $SrcDir | Out-Null
 
-$ExcludeList = @(
+$ExcludeDirs = @(
     ".git",
     "desktop_wrapper",
     "node_modules",
@@ -23,28 +21,18 @@ $ExcludeList = @(
     "storage/framework/cache/data"
 )
 
-Write-Host "Copying files to $SrcDir..."
+Write-Host "Syncing files using robocopy..."
+$exitCode = 0
+try {
+    # robocopy returns exit codes 0-7 for success. 8+ indicates error.
+    & robocopy "$ProjectDir" "$SrcDir" /MIR /XD $ExcludeDirs /R:1 /W:1 /NDL /NFL /NJH /NJS
+    $exitCode = $LASTEXITCODE
+} catch {
+    $exitCode = $LASTEXITCODE
+}
 
-# Get all child items in the project root
-$Items = Get-ChildItem -Path $ProjectDir
-
-foreach ($Item in $Items) {
-    $Name = $Item.Name
-    
-    # Check if this name is in our exclude list
-    if ($ExcludeList -contains $Name) {
-        continue
-    }
-    
-    $DestPath = Join-Path $SrcDir $Name
-    
-    if ($Item.PSIsContainer) {
-        # Copy directory recursively
-        Copy-Item -Path $Item.FullName -Destination $DestPath -Recurse -Force
-    } else {
-        # Copy file
-        Copy-Item -Path $Item.FullName -Destination $DestPath -Force
-    }
+if ($exitCode -ge 8) {
+    throw "robocopy failed with exit code $exitCode"
 }
 
 # Re-create empty folders that are required but might have been excluded/emptied

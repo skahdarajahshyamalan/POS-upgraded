@@ -12,9 +12,12 @@
         
         html {
             height: 100%;
-            background: linear-gradient(to right, #6366f1, #3b82f6);
+            background: radial-gradient(circle at 10% 20%, rgb(4, 21, 45) 0%, rgb(18, 12, 38) 90.1%);
         }
        
+        body, h1, h2, h3, h4, h5, h6, span, label, input, button, a {
+            font-family: 'Outfit', sans-serif !important;
+        }
         
         /* OPTION 2: Background Image */
         /* Uncomment below for image background */

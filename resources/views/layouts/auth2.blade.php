@@ -13,6 +13,10 @@
 
     <title>@yield('title') - {{ config('app.name', 'POS') }}</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     @include('layouts.partials.css')
 
     @include('layouts.partials.extracss_auth')
