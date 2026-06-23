@@ -271,19 +271,30 @@ function createDatabase() {
             return resolve();
         }
 
+        const DB_DATABASE_ENV = getEnvValue('DB_DATABASE', 'ultimate_pos_desktop');
+        const DB_USERNAME_ENV = getEnvValue('DB_USERNAME', 'pos_user');
+        const DB_PASSWORD_ENV = getEnvValue('DB_PASSWORD', 'pos_password');
+
+        // SQL commands to run as root to setup DB, user, and permissions
+        const sqlCmds = 
+            `CREATE DATABASE IF NOT EXISTS \`${DB_DATABASE_ENV}\`;` +
+            `CREATE USER IF NOT EXISTS '${DB_USERNAME_ENV}'@'%' IDENTIFIED BY '${DB_PASSWORD_ENV}';` +
+            `GRANT ALL PRIVILEGES ON \`${DB_DATABASE_ENV}\`.* TO '${DB_USERNAME_ENV}'@'%';` +
+            `FLUSH PRIVILEGES;`;
+
         const createDb = spawn(mysqlPath, [
             '-h', '127.0.0.1',
             '-P', DB_PORT.toString(),
             '-u', 'root',
-            '-e', 'CREATE DATABASE IF NOT EXISTS ultimate_pos_desktop;'
+            '-e', sqlCmds
         ]);
 
         createDb.on('close', (code) => {
             if (code === 0) {
-                console.log("Database ultimate_pos_desktop created or exists.");
+                console.log(`Database and user setup completed successfully for database: ${DB_DATABASE_ENV}`);
                 resolve();
             } else {
-                reject(new Error(`Failed to create database. Exit code: ${code}`));
+                reject(new Error(`Failed to create database/user. Exit code: ${code}`));
             }
         });
 
@@ -313,6 +324,14 @@ function runMigrationsAndSeeds() {
             '--force'
         ]);
 
+        migrate.stdout.on('data', (data) => {
+            console.log(`Migration: ${data.toString().trim()}`);
+        });
+
+        migrate.stderr.on('data', (data) => {
+            console.error(`Migration Error: ${data.toString().trim()}`);
+        });
+
         migrate.on('close', (code) => {
             if (code === 0) {
                 console.log("Database migrations ran successfully.");
@@ -329,6 +348,14 @@ function runMigrationsAndSeeds() {
                         'db:seed',
                         '--force'
                     ]);
+
+                    seed.stdout.on('data', (data) => {
+                        console.log(`Seed: ${data.toString().trim()}`);
+                    });
+
+                    seed.stderr.on('data', (data) => {
+                        console.error(`Seed Error: ${data.toString().trim()}`);
+                    });
                     
                     seed.on('close', (code) => {
                         if (code === 0) {
