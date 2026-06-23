@@ -51,6 +51,7 @@ function createSplash() {
         frame: false,
         transparent: true,
         alwaysOnTop: true,
+        icon: path.join(__dirname, 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: false
         }
@@ -174,6 +175,7 @@ function createMainWindow() {
         width: 1280,
         height: 800,
         show: false,
+        icon: path.join(__dirname, 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -331,6 +333,7 @@ function createActivationWindow() {
         height: 600,
         frame: false,
         transparent: true,
+        icon: path.join(__dirname, 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
