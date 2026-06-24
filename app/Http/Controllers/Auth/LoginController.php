@@ -166,7 +166,7 @@ class LoginController extends Controller
         // 1. If desktop app and cloud URL configured, attempt remote authentication first
         if ($isDesktop && !empty($cloudUrl)) {
             try {
-                $response = \Illuminate\Support\Facades\Http::timeout(5)->post("{$cloudUrl}/api/sync/auth", [
+                $response = \Illuminate\Support\Facades\Http::asForm()->timeout(5)->post("{$cloudUrl}/api/sync/auth", [
                     'username' => $username,
                     'password' => $password
                 ]);
