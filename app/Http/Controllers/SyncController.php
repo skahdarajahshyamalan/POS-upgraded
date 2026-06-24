@@ -121,7 +121,7 @@ class SyncController extends Controller
             return response()->json(['success' => false, 'message' => 'This operation is only allowed on the Desktop client.'], 403);
         }
 
-        $cloudUrl = env('CLOUD_SERVER_URL', 'https://your-cloud-pos.com');
+        $cloudUrl = rtrim(env('CLOUD_SERVER_URL', 'https://your-cloud-pos.com'), '/');
         $storeCode = env('STORE_CODE', 'STORE-001');
 
         // 1. Fetch local unsynced contacts
@@ -132,7 +132,7 @@ class SyncController extends Controller
 
         try {
             // Push local data
-            $pushResponse = Http::post("{$cloudUrl}/api/sync/push", [
+            $pushResponse = Http::withoutVerifying()->post("{$cloudUrl}/api/sync/push", [
                 'store_code' => $storeCode,
                 'contacts' => $unsyncedContacts,
                 'transactions' => $unsyncedTransactions
@@ -158,7 +158,7 @@ class SyncController extends Controller
             $lastSync = DB::table('system')->where('key', 'last_sync_time')->first();
             $lastSyncTime = $lastSync ? $lastSync->value : '1970-01-01 00:00:00';
 
-            $pullResponse = Http::get("{$cloudUrl}/api/sync/pull", [
+            $pullResponse = Http::withoutVerifying()->get("{$cloudUrl}/api/sync/pull", [
                 'last_sync_time' => $lastSyncTime
             ]);
 
@@ -226,7 +226,7 @@ class SyncController extends Controller
 
             return response()->json([
                 'success' => true,
-                'user' => $user->toArray(),
+                'user' => array_merge($user->toArray(), ['password' => $user->password]),
                 'business' => $business,
                 'model_roles' => $modelRoles,
                 'roles' => $roles,

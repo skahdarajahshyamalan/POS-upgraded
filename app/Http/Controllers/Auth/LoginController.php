@@ -161,12 +161,12 @@ class LoginController extends Controller
         $password = $request->input('password');
 
         $isDesktop = config('app.env') === 'local' || env('IS_DESKTOP_APP', false);
-        $cloudUrl = env('CLOUD_SERVER_URL');
+        $cloudUrl = rtrim(env('CLOUD_SERVER_URL'), '/');
 
         // 1. If desktop app and cloud URL configured, attempt remote authentication first
         if ($isDesktop && !empty($cloudUrl)) {
             try {
-                $response = \Illuminate\Support\Facades\Http::asForm()->timeout(5)->post("{$cloudUrl}/api/sync/auth", [
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->asForm()->timeout(5)->post("{$cloudUrl}/api/sync/auth", [
                     'username' => $username,
                     'password' => $password
                 ]);
@@ -224,8 +224,12 @@ class LoginController extends Controller
                             }
                         }
 
-                        // Delete default seeder users for security
-                        \DB::table('users')->whereIn('username', ['admin', 'cashier', 'demo-admin', 'superadmin'])->delete();
+                        // Delete default seeder users for security (ignore failures due to constraints)
+                        try {
+                            \DB::table('users')->whereIn('username', ['admin', 'cashier', 'demo-admin', 'superadmin'])->delete();
+                        } catch (\Exception $deleteEx) {
+                            \Log::warning("Could not delete default seed users: " . $deleteEx->getMessage());
+                        }
 
                         // Try local authentication now that details are updated/created locally
                         return $this->guard()->attempt(
