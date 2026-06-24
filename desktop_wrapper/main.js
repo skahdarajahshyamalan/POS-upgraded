@@ -452,7 +452,6 @@ const DB_HOST_ENV = getEnvValue('DB_HOST', '127.0.0.1');
 
 function startAppServices() {
     const APP_URL_ENV = getEnvValue('APP_URL', `http://127.0.0.1:${PORT}`);
-    const CLOUD_URL_ENV = getEnvValue('CLOUD_SERVER_URL', '');
     const isRemoteUrl = APP_URL_ENV.startsWith('http') && !APP_URL_ENV.includes('127.0.0.1') && !APP_URL_ENV.includes('localhost');
 
     if (isRemoteUrl) {
@@ -462,61 +461,51 @@ function startAppServices() {
         return;
     }
 
-    updateStatus('Checking network connection...');
+    console.log(`Loading local mode with URL: ${APP_URL_ENV}`);
+    targetAppUrl = APP_URL_ENV;
     
-    checkUrlReachable(CLOUD_URL_ENV).then((isOnline) => {
-        if (isOnline) {
-            console.log(`Cloud server is online. Loading remote URL: ${CLOUD_URL_ENV}`);
-            targetAppUrl = CLOUD_URL_ENV;
-            createMainWindow();
-        } else {
-            console.log(`Cloud server is offline or unreachable. Falling back to local mode.`);
-            targetAppUrl = APP_URL_ENV;
-            
-            let promise = Promise.resolve();
-            
-            // Only run local DB services if database is configured to use local MariaDB (port 3307)
-            if (DB_PORT_ENV === 3307) {
-                promise = promise
-                    .then(() => {
-                        updateStatus('Starting Database Service...');
-                        return startDatabase();
-                    })
-                    .then(() => {
-                        updateStatus('Provisioning database...');
-                        return createDatabase();
-                    })
-                    .then(() => {
-                        updateStatus('Installing local databases...');
-                        return runMigrationsAndSeeds();
-                    });
-            } else {
-                console.log(`Using external database connection: ${DB_HOST_ENV}:${DB_PORT_ENV}. Skipping local database startup and migrations.`);
-            }
+    let promise = Promise.resolve();
+    
+    // Only run local DB services if database is configured to use local MariaDB (port 3307)
+    if (DB_PORT_ENV === 3307) {
+        promise = promise
+            .then(() => {
+                updateStatus('Starting Database Service...');
+                return startDatabase();
+            })
+            .then(() => {
+                updateStatus('Provisioning database...');
+                return createDatabase();
+            })
+            .then(() => {
+                updateStatus('Installing local databases...');
+                return runMigrationsAndSeeds();
+            });
+    } else {
+        console.log(`Using external database connection: ${DB_HOST_ENV}:${DB_PORT_ENV}. Skipping local database startup and migrations.`);
+    }
 
-            promise
-                .then(() => {
-                    // Run backup in background on startup if local
-                    if (DB_PORT_ENV === 3307) {
-                        try {
-                            const { runBackup } = require('./backup');
-                            runBackup();
-                        } catch (err) {
-                            console.error("Startup database backup failed:", err);
-                        }
-                    }
-                    updateStatus('Loading ..');
-                    return startWebServer();
-                })
-                .then(() => {
-                    createMainWindow();
-                })
-                .catch(err => {
-                    console.error(err);
-                    updateStatus(`Error: ${err.message}`);
-                });
-        }
-    });
+    promise
+        .then(() => {
+            // Run backup in background on startup if local
+            if (DB_PORT_ENV === 3307) {
+                try {
+                    const { runBackup } = require('./backup');
+                    runBackup();
+                } catch (err) {
+                    console.error("Startup database backup failed:", err);
+                }
+            }
+            updateStatus('Loading ..');
+            return startWebServer();
+        })
+        .then(() => {
+            createMainWindow();
+        })
+        .catch(err => {
+            console.error(err);
+            updateStatus(`Error: ${err.message}`);
+        });
 }
 
 // IPC Handlers for licensing
