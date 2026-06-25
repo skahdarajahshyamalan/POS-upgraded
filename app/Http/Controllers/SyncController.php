@@ -190,51 +190,72 @@ class SyncController extends Controller
      */
     public function remoteAuth(Request $request)
     {
-        $username = $request->input('username');
-        $password = $request->input('password');
+        try {
+            $username = $request->input('username');
+            $password = $request->input('password');
 
-        if (empty($username) || empty($password)) {
-            return response()->json(['success' => false, 'message' => 'Username and password are required.'], 400);
-        }
+            if (empty($username) || empty($password)) {
+                return response()->json(['success' => false, 'message' => 'Username and password are required.'], 400);
+            }
 
-        // Try to authenticate using username or email
-        $fieldType = filter_var($username, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
-        
-        $user = \App\User::where($fieldType, $username)->first();
-
-        if ($user && \Hash::check($password, $user->password)) {
-            // Fetch business
-            $business = \DB::table('business')->where('id', $user->business_id)->first();
+            // Try to authenticate using username or email
+            $fieldType = filter_var($username, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
             
-            // Fetch model roles
-            $modelRoles = \DB::table('model_has_roles')
-                ->where('model_id', $user->id)
-                ->where('model_type', \App\User::class)
-                ->get();
-                
-            $roleIds = $modelRoles->pluck('role_id')->toArray();
-            $roles = \DB::table('roles')->whereIn('id', $roleIds)->get();
+            $user = \App\User::where($fieldType, $username)->first();
 
-            // Fetch model permissions
-            $modelPermissions = \DB::table('model_has_permissions')
-                ->where('model_id', $user->id)
-                ->where('model_type', \App\User::class)
-                ->get();
+            if ($user && \Hash::check($password, $user->password)) {
+                // Fetch business
+                $business = \DB::table('business')->where('id', $user->business_id)->first();
                 
-            $permissionIds = $modelPermissions->pluck('permission_id')->toArray();
-            $permissions = \DB::table('permissions')->whereIn('id', $permissionIds)->get();
+                // Fetch model roles
+                $modelRoles = \DB::table('model_has_roles')
+                    ->where('model_id', $user->id)
+                    ->where('model_type', \App\User::class)
+                    ->get();
+                    
+                $roleIds = $modelRoles->pluck('role_id')->toArray();
+                $roles = \DB::table('roles')->whereIn('id', $roleIds)->get();
 
+                // Fetch model permissions
+                $modelPermissions = \DB::table('model_has_permissions')
+                    ->where('model_id', $user->id)
+                    ->where('model_type', \App\User::class)
+                    ->get();
+                    
+                $permissionIds = $modelPermissions->pluck('permission_id')->toArray();
+                $permissions = \DB::table('permissions')->whereIn('id', $permissionIds)->get();
+
+                // Fetch role_has_permissions (permissions granted via role)
+                $rolePermissions = \DB::table('role_has_permissions')
+                    ->whereIn('role_id', $roleIds)
+                    ->get();
+                    
+                // Merge all permission IDs (direct + role-based)
+                $allPermissionIds = array_unique(array_merge(
+                    $permissionIds,
+                    $rolePermissions->pluck('permission_id')->toArray()
+                ));
+                $allPermissions = \DB::table('permissions')->whereIn('id', $allPermissionIds)->get();
+
+                return response()->json([
+                    'success' => true,
+                    'user' => array_merge($user->toArray(), ['password' => $user->password]),
+                    'business' => $business,
+                    'model_roles' => $modelRoles,
+                    'roles' => $roles,
+                    'role_permissions' => $rolePermissions,
+                    'model_permissions' => $modelPermissions,
+                    'permissions' => $allPermissions
+                ]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Invalid credentials.'], 401);
+        } catch (\Exception $e) {
             return response()->json([
-                'success' => true,
-                'user' => array_merge($user->toArray(), ['password' => $user->password]),
-                'business' => $business,
-                'model_roles' => $modelRoles,
-                'roles' => $roles,
-                'model_permissions' => $modelPermissions,
-                'permissions' => $permissions
-            ]);
+                'success' => false,
+                'message' => 'Server Error: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
         }
-
-        return response()->json(['success' => false, 'message' => 'Invalid credentials.'], 401);
     }
 }

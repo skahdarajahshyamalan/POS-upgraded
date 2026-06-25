@@ -89,7 +89,7 @@ class LoginController extends Controller
     {
         $this->businessUtil->activityLog($user, 'login', null, [], false, $user->business_id);
 
-        if (! $user->business->is_active) {
+        if ($user->business_id && !$user->business->is_active) {
             \Auth::logout();
 
             return redirect('/login')
@@ -174,20 +174,26 @@ class LoginController extends Controller
                 if ($response->successful()) {
                     $data = $response->json();
                     if (!empty($data['success']) && !empty($data['user'])) {
+                        // Helper function to filter array keys by local table columns
+                        $filterData = function($tableName, $dataArray) {
+                            $columns = \Schema::getColumnListing($tableName);
+                            return array_intersect_key((array)$dataArray, array_flip($columns));
+                        };
+
                         // Sync business first to avoid FK constraint issues
                         if (!empty($data['business'])) {
-                            $businessData = (array)$data['business'];
+                            $businessData = $filterData('business', $data['business']);
                             \DB::table('business')->updateOrInsert(['id' => $businessData['id']], $businessData);
                         }
 
                         // Sync user details locally
-                        $userData = (array)$data['user'];
+                        $userData = $filterData('users', $data['user']);
                         \DB::table('users')->updateOrInsert(['id' => $userData['id']], $userData);
 
                         // Sync roles table
                         if (!empty($data['roles'])) {
                             foreach ($data['roles'] as $role) {
-                                $roleArray = (array)$role;
+                                $roleArray = $filterData('roles', $role);
                                 \DB::table('roles')->updateOrInsert(['id' => $roleArray['id']], $roleArray);
                             }
                         }
@@ -195,7 +201,7 @@ class LoginController extends Controller
                         // Sync model roles
                         if (!empty($data['model_roles'])) {
                             foreach ($data['model_roles'] as $mRole) {
-                                $mRoleArray = (array)$mRole;
+                                $mRoleArray = $filterData('model_has_roles', $mRole);
                                 \DB::table('model_has_roles')->updateOrInsert([
                                     'role_id' => $mRoleArray['role_id'],
                                     'model_id' => $mRoleArray['model_id'],
@@ -207,7 +213,7 @@ class LoginController extends Controller
                         // Sync permissions table
                         if (!empty($data['permissions'])) {
                             foreach ($data['permissions'] as $perm) {
-                                $permArray = (array)$perm;
+                                $permArray = $filterData('permissions', $perm);
                                 \DB::table('permissions')->updateOrInsert(['id' => $permArray['id']], $permArray);
                             }
                         }
@@ -215,7 +221,7 @@ class LoginController extends Controller
                         // Sync model permissions
                         if (!empty($data['model_permissions'])) {
                             foreach ($data['model_permissions'] as $mPerm) {
-                                $mPermArray = (array)$mPerm;
+                                $mPermArray = $filterData('model_has_permissions', $mPerm);
                                 \DB::table('model_has_permissions')->updateOrInsert([
                                     'permission_id' => $mPermArray['permission_id'],
                                     'model_id' => $mPermArray['model_id'],
@@ -226,7 +232,10 @@ class LoginController extends Controller
 
                         // Delete default seeder users for security (ignore failures due to constraints)
                         try {
-                            \DB::table('users')->whereIn('username', ['admin', 'cashier', 'demo-admin', 'superadmin'])->delete();
+                            \DB::table('users')
+                                ->whereIn('username', ['admin', 'cashier', 'demo-admin', 'superadmin'])
+                                ->where('id', '!=', $userData['id'])
+                                ->delete();
                         } catch (\Exception $deleteEx) {
                             \Log::warning("Could not delete default seed users: " . $deleteEx->getMessage());
                         }

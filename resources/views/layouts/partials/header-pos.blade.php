@@ -1,6 +1,6 @@
 <!-- default value -->
 @php
-    $go_back_url = action([\App\Http\Controllers\SellPosController::class, 'index']);
+    $go_back_url = url('/home');
     $transaction_sub_type = '';
     $view_suspended_sell_url = action([\App\Http\Controllers\SellController::class, 'index']) . '?suspended=1';
     $pos_redirect_url = action([\App\Http\Controllers\SellPosController::class, 'create']);

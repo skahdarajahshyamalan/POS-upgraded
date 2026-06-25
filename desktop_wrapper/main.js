@@ -180,12 +180,28 @@ function startWebServer() {
             return resolve();
         }
 
+        const webServerEnv = Object.assign({}, process.env, {
+            DB_HOST: '127.0.0.1',
+            DB_PORT: '3307',
+            DB_DATABASE: getEnvValue('DB_DATABASE', 'atpoxise_posvtventsys'),
+            DB_USERNAME: getEnvValue('DB_USERNAME', 'pos_user'),
+            DB_PASSWORD: getEnvValue('DB_PASSWORD', 'pos_password'),
+        });
+
         // Start Laravel PHP Server
         phpProcess = spawn(phpPath, [
             '-d', `extension_dir=${path.join(phpDir, 'ext')}`,
             '-S', `127.0.0.1:${PORT}`,
             '-t', path.join(srcDir, 'public')
-        ]);
+        ], { cwd: srcDir, env: webServerEnv });
+
+        phpProcess.stdout.on('data', (data) => {
+            console.log(`[PHP Server STDOUT] ${data.toString().trim()}`);
+        });
+
+        phpProcess.stderr.on('data', (data) => {
+            console.error(`[PHP Server STDERR] ${data.toString().trim()}`);
+        });
 
         phpProcess.on('error', (err) => {
             reject(err);
@@ -253,6 +269,22 @@ function createMainWindow() {
         mainWindow.maximize();
     });
 
+    mainWindow.on('close', (e) => {
+        console.log('[Main Process] mainWindow close event triggered. Cleaning up and exiting...');
+        e.preventDefault();
+        try {
+            if (phpProcess) phpProcess.kill();
+        } catch (err) {
+            console.error("Error killing phpProcess on close:", err);
+        }
+        try {
+            if (dbProcess) dbProcess.kill();
+        } catch (err) {
+            console.error("Error killing dbProcess on close:", err);
+        }
+        app.exit(0);
+    });
+
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
@@ -317,12 +349,20 @@ function runMigrationsAndSeeds() {
             return resolve();
         }
 
+        const desktopEnv = Object.assign({}, process.env, {
+            DB_HOST: '127.0.0.1',
+            DB_PORT: '3307',
+            DB_DATABASE: getEnvValue('DB_DATABASE', 'atpoxise_posvtventsys'),
+            DB_USERNAME: getEnvValue('DB_USERNAME', 'pos_user'),
+            DB_PASSWORD: getEnvValue('DB_PASSWORD', 'pos_password'),
+        });
+
         const migrate = spawn(phpPath, [
             '-d', `extension_dir=${path.join(phpDir, 'ext')}`,
             artisanPath,
             'migrate',
             '--force'
-        ]);
+        ], { cwd: srcDir, env: desktopEnv });
 
         migrate.stdout.on('data', (data) => {
             console.log(`Migration: ${data.toString().trim()}`);
@@ -347,7 +387,7 @@ function runMigrationsAndSeeds() {
                         artisanPath,
                         'db:seed',
                         '--force'
-                    ]);
+                    ], { cwd: srcDir, env: desktopEnv });
 
                     seed.stdout.on('data', (data) => {
                         console.log(`Seed: ${data.toString().trim()}`);
@@ -552,6 +592,33 @@ ipcMain.on('exit-app', () => {
     }
     app.exit(0);
 });
+
+ipcMain.on('navigate-to-dashboard', () => {
+    console.log('[Main Process] Received navigate-to-dashboard IPC message.');
+    try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const baseUrl = targetAppUrl || getEnvValue('APP_URL', `http://127.0.0.1:${PORT}`);
+            const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+            const targetUrl = `${cleanBaseUrl}/home`;
+            console.log(`[Main Process] Disabling onbeforeunload and navigating to: ${targetUrl}`);
+            mainWindow.webContents.executeJavaScript('window.onbeforeunload = null;')
+                .catch(jsErr => {
+                    console.error('[Main Process] Failed to clear window.onbeforeunload:', jsErr);
+                })
+                .then(() => {
+                    return mainWindow.loadURL(targetUrl);
+                })
+                .catch(err => {
+                    console.error(`[Main Process] Failed to load URL in mainWindow: ${err.message}`);
+                });
+        } else {
+            console.error('[Main Process] mainWindow is not available or destroyed!');
+        }
+    } catch (e) {
+        console.error('[Main Process] Exception in navigate-to-dashboard handler:', e);
+    }
+});
+
 
 app.on('ready', () => {
     createSplash();

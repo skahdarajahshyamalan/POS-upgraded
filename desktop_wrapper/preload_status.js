@@ -2,28 +2,42 @@ const { ipcRenderer } = require('electron');
 
 console.log('[Preload Status] Preload script loaded.');
 
+// Helper to navigate the main world (renderer page context) from isolated preload script
+function navigateMainWorld(url) {
+    try {
+        console.log('[Preload Status] Performing navigation to:', url);
+        if (url.includes('/home') || url.endsWith('/home')) {
+            ipcRenderer.send('navigate-to-dashboard');
+        } else {
+            window.location.href = url;
+        }
+    } catch (e) {
+        console.error('[Preload Status] Navigation failed:', e);
+    }
+}
+
 // Register global click interceptor in capturing phase immediately (outside DOMContentLoaded)
 document.addEventListener('click', (e) => {
     // Safely check closest anchor without throwing TypeErrors
     const anchor = (e.target && typeof e.target.closest === 'function') ? e.target.closest('a') : null;
     if (anchor) {
         const href = anchor.getAttribute('href') || '';
-        const hasChevron = anchor.querySelector('.icon-tabler-chevron-left');
-        const isGoBack = href.includes('/sells/pos') || hasChevron || anchor.title === 'Go Back';
         
-        console.log('[Preload Status] Clicked anchor:', { href: href, isGoBack: isGoBack });
+        // Intercept if the old /sells/pos URL is still in href (fallback safety)
+        // Also intercept /home links to bypass page-level click preventions
+        const needsRedirect = href.includes('/sells/pos') || href.includes('/home') || href.endsWith('/home');
         
-        if (isGoBack) {
-            console.log('[Preload Status] Intercepting Go Back navigation. Redirecting to /home.');
+        console.log('[Preload Status] Clicked anchor href:', href, 'needsRedirect:', needsRedirect);
+        
+        if (needsRedirect) {
+            console.log('[Preload Status] Redirecting to Dashboard via IPC.');
             e.preventDefault();
             e.stopPropagation();
-            anchor.setAttribute('href', '/home');
-            setTimeout(() => {
-                window.location.href = '/home';
-            }, 10);
+            ipcRenderer.send('navigate-to-dashboard');
         }
     }
-}, true); // useCapture = true is critical here to bypass page-level e.stopPropagation()
+}, true);
+
 
 window.addEventListener('keydown', (e) => {
     if (e.altKey && e.key === 'ArrowLeft') {
@@ -86,6 +100,63 @@ function setOnline(online) {
 let isPackaged = false;
 let resetTimeout;
 let lastSyncData = { status: 'idle', file: '' };
+
+// Database sync status variables
+let dbSyncStatus = { status: 'idle', message: 'Sync Database' };
+let isSyncing = false;
+
+function showDBSyncStatus(status, message) {
+    dbSyncStatus = { status, message };
+    applySyncUI();
+}
+
+async function triggerDatabaseSync() {
+    if (isSyncing) return;
+
+    const isRemote = !window.location.origin.includes('127.0.0.1') && !window.location.origin.includes('localhost');
+    if (isRemote) return; // No sync needed in cloud direct mode
+
+    if (!navigator.onLine) {
+        showDBSyncStatus('error', 'Sync Failed: Offline');
+        setTimeout(() => {
+            showDBSyncStatus('idle', 'Sync Database');
+        }, 4000);
+        return;
+    }
+
+    isSyncing = true;
+    showDBSyncStatus('syncing', 'Syncing DB...');
+
+    try {
+        console.log('[Preload Status] Triggering database sync API...');
+        const response = await fetch('/api/sync/local-trigger', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            console.log('[Preload Status] Database sync completed successfully!');
+            showDBSyncStatus('success', 'Sync Complete!');
+        } else {
+            console.error('[Preload Status] Database sync failed:', data.message);
+            showDBSyncStatus('error', `Sync Failed: ${data.message || 'Server Error'}`);
+        }
+    } catch (err) {
+        console.error('[Preload Status] Network error during database sync:', err);
+        showDBSyncStatus('error', 'Sync Failed: Network Error');
+    } finally {
+        isSyncing = false;
+        setTimeout(() => {
+            if (!isSyncing) {
+                showDBSyncStatus('idle', 'Sync Database');
+            }
+        }, 5000);
+    }
+}
 
 window.addEventListener('DOMContentLoaded', () => {
     console.log('[Preload Status] DOMContentLoaded fired.');
@@ -244,14 +315,20 @@ window.addEventListener('DOMContentLoaded', () => {
 
             // Bind click handlers to newly created elements
             document.getElementById('status-back-btn').addEventListener('click', () => {
-                console.log('[Preload Status] Back button clicked.');
-                window.history.back();
+                console.log('[Preload Status] Status Back button clicked. Navigating to Dashboard.');
+                navigateMainWorld('/home');
             });
 
             document.getElementById('status-exit-btn').addEventListener('click', () => {
                 console.log('[Preload Status] Exit button clicked. Sending exit-app IPC message.');
                 ipcRenderer.send('exit-app');
             });
+
+            // Bind database sync click handler to the sync indicator
+            const syncIndicator = document.getElementById('sync-indicator');
+            if (syncIndicator) {
+                syncIndicator.addEventListener('click', triggerDatabaseSync);
+            }
 
             // Update UI elements with latest state
             updateOnlineStatus();
@@ -267,26 +344,77 @@ window.addEventListener('DOMContentLoaded', () => {
     function applySyncUI() {
         const syncText = document.getElementById('sync-text');
         const syncIcon = document.getElementById('sync-icon');
+        const syncIndicator = document.getElementById('sync-indicator');
         if (!syncText || !syncIcon) return;
 
-        if (isPackaged) {
+        const isRemote = !window.location.origin.includes('127.0.0.1') && !window.location.origin.includes('localhost');
+
+        if (isRemote) {
             syncIcon.style.display = 'none';
-            syncText.innerText = 'Desktop App (Offline Mode Ready)';
-            syncText.style.color = 'rgba(255, 255, 255, 0.5)';
-        } else {
+            syncText.innerText = 'Cloud Mode (Connected Live)';
+            syncText.style.color = 'rgba(255, 255, 255, 0.6)';
+            if (syncIndicator) {
+                syncIndicator.style.cursor = 'default';
+                syncIndicator.title = 'You are connected directly to the cloud server.';
+            }
+            return;
+        }
+
+        if (isPackaged) {
             syncIcon.style.display = 'inline-block';
-            if (lastSyncData.status === 'syncing') {
+            syncText.innerText = dbSyncStatus.message;
+            if (dbSyncStatus.status === 'syncing') {
                 syncIcon.classList.add('spinning');
-                syncText.innerText = `Syncing ${lastSyncData.file}...`;
                 syncText.style.color = '#ff9f1c';
-            } else if (lastSyncData.status === 'success') {
+            } else if (dbSyncStatus.status === 'success') {
                 syncIcon.classList.remove('spinning');
-                syncText.innerText = 'Sync: Up to date';
                 syncText.style.color = '#2ec4b6';
+            } else if (dbSyncStatus.status === 'error') {
+                syncIcon.classList.remove('spinning');
+                syncText.style.color = '#e71d36';
             } else {
                 syncIcon.classList.remove('spinning');
-                syncText.innerText = 'Sync: Idle';
-                syncText.style.color = 'rgba(255, 255, 255, 0.7)';
+                syncText.style.color = 'rgba(255, 255, 255, 0.8)';
+            }
+            if (syncIndicator) {
+                syncIndicator.style.cursor = 'pointer';
+                syncIndicator.title = 'Click to sync local database with cloud';
+            }
+        } else {
+            // Development file watcher mode
+            syncIcon.style.display = 'inline-block';
+            if (syncIndicator) {
+                syncIndicator.style.cursor = 'pointer';
+                syncIndicator.title = 'Click to sync local database with cloud (File watcher active)';
+            }
+            if (dbSyncStatus.status !== 'idle') {
+                // Show database sync status temporarily
+                syncText.innerText = dbSyncStatus.message;
+                if (dbSyncStatus.status === 'syncing') {
+                    syncIcon.classList.add('spinning');
+                    syncText.style.color = '#ff9f1c';
+                } else if (dbSyncStatus.status === 'success') {
+                    syncIcon.classList.remove('spinning');
+                    syncText.style.color = '#2ec4b6';
+                } else if (dbSyncStatus.status === 'error') {
+                    syncIcon.classList.remove('spinning');
+                    syncText.style.color = '#e71d36';
+                }
+            } else {
+                // Show standard dev file watcher status
+                if (lastSyncData.status === 'syncing') {
+                    syncIcon.classList.add('spinning');
+                    syncText.innerText = `Dev Sync: ${lastSyncData.file}...`;
+                    syncText.style.color = '#ff9f1c';
+                } else if (lastSyncData.status === 'success') {
+                    syncIcon.classList.remove('spinning');
+                    syncText.innerText = 'Dev Sync: Up to date';
+                    syncText.style.color = '#2ec4b6';
+                } else {
+                    syncIcon.classList.remove('spinning');
+                    syncText.innerText = 'Dev Sync: Idle';
+                    syncText.style.color = 'rgba(255, 255, 255, 0.7)';
+                }
             }
         }
     }
@@ -326,7 +454,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Initial check and regular check for network
     updateOnlineStatus();
-    window.addEventListener('online', updateOnlineStatus);
+    
+    // Auto sync when internet transitions from offline to online
+    window.addEventListener('online', () => {
+        updateOnlineStatus();
+        console.log('[Preload Status] Internet restored. Auto-triggering database sync...');
+        triggerDatabaseSync();
+    });
+    
     window.addEventListener('offline', updateOnlineStatus);
     setInterval(updateOnlineStatus, 8000);
 
