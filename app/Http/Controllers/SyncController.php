@@ -24,6 +24,13 @@ class SyncController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized sync request.'], 401);
         }
 
+        // Auto-run migrations on the cloud server to ensure sync columns/tables are up to date
+        try {
+            \Artisan::call('migrate', ['--force' => true]);
+        } catch (\Exception $e) {
+            \Log::error('[SyncPush] Auto-migration failed: ' . $e->getMessage());
+        }
+
         $storeCode = $request->input('store_code');
         $transactions = $request->input('transactions', []);
         $contacts = $request->input('contacts', []);
