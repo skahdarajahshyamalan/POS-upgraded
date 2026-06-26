@@ -246,11 +246,27 @@ class SyncController extends Controller
 
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
+        $debugLogs = [];
+        if ($request->input('debug_logs')) {
+            $logPath = storage_path('logs/laravel.log');
+            if (file_exists($logPath)) {
+                $lines = file($logPath);
+                $debugLogs = array_slice($lines, -50);
+            } else {
+                $logPath = storage_path('logs/laravel-' . date('Y-m-d') . '.log');
+                if (file_exists($logPath)) {
+                    $lines = file($logPath);
+                    $debugLogs = array_slice($lines, -50);
+                }
+            }
+        }
+
         return response()->json([
             'success' => true,
             'synced_transactions' => $savedTransactionIds,
             'synced_contacts' => $savedContactIds,
-            'synced_products' => $savedProductIds
+            'synced_products' => $savedProductIds,
+            'debug_logs' => $debugLogs
         ]);
     }
 
