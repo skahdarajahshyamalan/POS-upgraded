@@ -132,6 +132,18 @@ function startDatabase() {
                 }
             });
         } else {
+            // Delete Aria log files on startup to prevent "Aria recovery failed" crashes from unclean shutdowns
+            try {
+                const files = fs.readdirSync(dbDataDir);
+                for (const file of files) {
+                    if (file.startsWith('aria_log.') || file === 'aria_log_control') {
+                        fs.unlinkSync(path.join(dbDataDir, file));
+                        console.log(`[Main Process] Auto-removed log: ${file} to prevent Aria recovery lock`);
+                    }
+                }
+            } catch (err) {
+                console.error("[Main Process] Failed to clean up Aria logs:", err);
+            }
             launchMysqld(mysqldPath, dbDataDir, resolve, reject);
         }
     });
