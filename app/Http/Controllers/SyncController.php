@@ -16,6 +16,14 @@ class SyncController extends Controller
      */
     public function push(Request $request)
     {
+        // Validate Sync Secret
+        $secret = $request->header('X-Sync-Secret') ?? $request->input('sync_secret');
+        $expectedSecret = env('SYNC_SECRET', '');
+
+        if (!empty($expectedSecret) && $secret !== $expectedSecret) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized sync request.'], 401);
+        }
+
         $storeCode = $request->input('store_code');
         $transactions = $request->input('transactions', []);
         $contacts = $request->input('contacts', []);
@@ -24,61 +32,150 @@ class SyncController extends Controller
             return response()->json(['success' => false, 'message' => 'Store code required'], 400);
         }
 
+        // Try to resolve business_id and location_id from store_code
+        $location = \App\BusinessLocation::where('location_id', $storeCode)->first();
+        $businessId = $location ? $location->business_id : 1;
+        $locationId = $location ? $location->id : null;
+
         $savedTransactionIds = [];
         $savedContactIds = [];
 
-        DB::beginTransaction();
-        try {
-            // 1. Sync Contacts
-            foreach ($contacts as $c) {
-                // Find contact by store_code and local contact_id
-                $contact = Contact::where('store_code', $storeCode)
-                    ->where('contact_id', $c['id']) // local ID
-                    ->first();
+        // 1. Sync Contacts
+        foreach ($contacts as $c) {
+            DB::beginTransaction();
+            try {
+                // Find contact by store_code and contact_id/name/mobile
+                $contact = null;
+                if (!empty($c['contact_id'])) {
+                    $contact = Contact::where('contact_id', $c['contact_id'])->first();
+                }
+                if (!$contact && !empty($c['mobile'])) {
+                    $contact = Contact::where('name', $c['name'])
+                        ->where('mobile', $c['mobile'])
+                        ->first();
+                }
+                if (!$contact) {
+                    $contact = Contact::where('name', $c['name'])->first();
+                }
 
                 if (!$contact) {
                     $contact = new Contact();
                 }
 
-                // Map data from request payload
                 $contact->fill($c);
                 $contact->store_code = $storeCode;
+                $contact->business_id = $businessId;
                 $contact->is_synced = true;
                 $contact->save();
 
+                DB::commit();
                 $savedContactIds[] = $c['id'];
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error('[SyncPush] Contact sync error: ' . $e->getMessage());
             }
+        }
 
-            // 2. Sync Transactions
-            foreach ($transactions as $t) {
-                // Prevent duplicate by checking store_code and local transaction id
-                // UltimatePOS has transaction_ref_no or we can map local_id
+        // 2. Sync Transactions
+        foreach ($transactions as $t) {
+            DB::beginTransaction();
+            try {
+                // Prevent duplicate by checking store_code and invoice_no / ref_no
                 $transaction = Transaction::where('store_code', $storeCode)
-                    ->where('invoice_no', $t['invoice_no']) // Or unique reference
+                    ->where(function($query) use ($t) {
+                        if (!empty($t['invoice_no'])) {
+                            $query->where('invoice_no', $t['invoice_no']);
+                        } else if (!empty($t['ref_no'])) {
+                            $query->where('ref_no', $t['ref_no']);
+                        } else {
+                            $query->where('id', 0);
+                        }
+                    })
                     ->first();
 
-                if (!$transaction) {
+                if ($transaction) {
+                    // Delete existing child records to avoid duplicate sell lines / payments
+                    $transaction->sell_lines()->delete();
+                    $transaction->purchase_lines()->delete();
+                    $transaction->payment_lines()->delete();
+                } else {
                     $transaction = new Transaction();
                 }
 
                 $transaction->fill($t);
                 $transaction->store_code = $storeCode;
+                $transaction->business_id = $businessId;
+                if ($locationId) {
+                    $transaction->location_id = $locationId;
+                }
                 $transaction->is_synced = true;
+
+                // Map contact
+                if (!empty($t['contact_ref'])) {
+                    $ref = $t['contact_ref'];
+                    $contactVal = null;
+                    if (!empty($ref['contact_id'])) {
+                        $contactVal = Contact::where('contact_id', $ref['contact_id'])->first();
+                    }
+                    if (!$contactVal && !empty($ref['mobile'])) {
+                        $contactVal = Contact::where('name', $ref['name'])
+                            ->where('mobile', $ref['mobile'])
+                            ->first();
+                    }
+                    if (!$contactVal) {
+                        $contactVal = Contact::where('name', $ref['name'])->first();
+                    }
+                    if ($contactVal) {
+                        $transaction->contact_id = $contactVal->id;
+                    }
+                }
+
                 $transaction->save();
 
-                $savedTransactionIds[] = $t['id'];
-            }
+                // Save sell lines
+                if (!empty($t['sell_lines'])) {
+                    foreach ($t['sell_lines'] as $line) {
+                        $sellLine = new \App\TransactionSellLine();
+                        $sellLine->fill($line);
+                        $sellLine->transaction_id = $transaction->id;
+                        $sellLine->save();
+                    }
+                }
 
-            DB::commit();
-            return response()->json([
-                'success' => true,
-                'synced_transactions' => $savedTransactionIds,
-                'synced_contacts' => $savedContactIds
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+                // Save purchase lines
+                if (!empty($t['purchase_lines'])) {
+                    foreach ($t['purchase_lines'] as $line) {
+                        $purchaseLine = new \App\PurchaseLine();
+                        $purchaseLine->fill($line);
+                        $purchaseLine->transaction_id = $transaction->id;
+                        $purchaseLine->save();
+                    }
+                }
+
+                // Save payments
+                if (!empty($t['payment_lines'])) {
+                    foreach ($t['payment_lines'] as $payment) {
+                        $payLine = new \App\TransactionPayment();
+                        $payLine->fill($payment);
+                        $payLine->transaction_id = $transaction->id;
+                        $payLine->business_id = $businessId;
+                        $payLine->save();
+                    }
+                }
+
+                DB::commit();
+                $savedTransactionIds[] = $t['id'];
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error('[SyncPush] Transaction sync error: ' . $e->getMessage() . ' | Data: ' . json_encode($t));
+            }
         }
+
+        return response()->json([
+            'success' => true,
+            'synced_transactions' => $savedTransactionIds,
+            'synced_contacts' => $savedContactIds
+        ]);
     }
 
     /**
@@ -127,16 +224,37 @@ class SyncController extends Controller
         // 1. Fetch local unsynced contacts
         $unsyncedContacts = Contact::where('is_synced', false)->get()->toArray();
 
-        // 2. Fetch local unsynced transactions
-        $unsyncedTransactions = Transaction::where('is_synced', false)->get()->toArray();
+        // 2. Fetch local unsynced transactions with their relational data
+        $unsyncedTransactions = Transaction::where('is_synced', false)->get();
+        $transactionsPayload = [];
+
+        foreach ($unsyncedTransactions as $t) {
+            $tArr = $t->toArray();
+            $tArr['sell_lines'] = $t->sell_lines->toArray();
+            $tArr['purchase_lines'] = $t->purchase_lines->toArray();
+            $tArr['payment_lines'] = $t->payment_lines->toArray();
+
+            // Add contact reference for mapping on cloud
+            if ($t->contact) {
+                $tArr['contact_ref'] = [
+                    'contact_id' => $t->contact->contact_id,
+                    'name' => $t->contact->name,
+                    'mobile' => $t->contact->mobile,
+                ];
+            }
+            $transactionsPayload[] = $tArr;
+        }
 
         try {
             // Push local data
-            $pushResponse = Http::withoutVerifying()->post("{$cloudUrl}/api/sync/push", [
-                'store_code' => $storeCode,
-                'contacts' => $unsyncedContacts,
-                'transactions' => $unsyncedTransactions
-            ]);
+            $pushResponse = Http::withoutVerifying()
+                ->withHeaders(['X-Sync-Secret' => env('SYNC_SECRET', '')])
+                ->post("{$cloudUrl}/api/sync/push", [
+                    'store_code' => $storeCode,
+                    'sync_secret' => env('SYNC_SECRET', ''),
+                    'contacts' => $unsyncedContacts,
+                    'transactions' => $transactionsPayload
+                ]);
 
             if ($pushResponse->successful()) {
                 $resData = $pushResponse->json();
