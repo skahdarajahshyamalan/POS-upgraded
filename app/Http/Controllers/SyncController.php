@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use App\Transaction;
 use App\Contact;
 
@@ -24,14 +25,28 @@ class SyncController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized sync request.'], 401);
         }
 
-        // Auto-run migrations on the cloud server to ensure sync columns/tables are up to date
-        $migrationOutput = '';
+        // Ensure sync columns exist on cloud server (idempotent — safe to run any time)
         try {
-            \Artisan::call('migrate', ['--force' => true]);
-            $migrationOutput = \Artisan::output();
+            if (!Schema::hasColumn('transactions', 'is_synced')) {
+                Schema::table('transactions', function ($table) {
+                    $table->boolean('is_synced')->default(false)->after('id');
+                    $table->string('store_code')->nullable()->after('is_synced');
+                });
+            }
+            if (!Schema::hasColumn('contacts', 'is_synced')) {
+                Schema::table('contacts', function ($table) {
+                    $table->boolean('is_synced')->default(false)->after('id');
+                    $table->string('store_code')->nullable()->after('is_synced');
+                });
+            }
+            if (!Schema::hasColumn('products', 'is_synced')) {
+                Schema::table('products', function ($table) {
+                    $table->boolean('is_synced')->default(true)->after('id');
+                    $table->string('store_code')->nullable()->after('is_synced');
+                });
+            }
         } catch (\Exception $e) {
-            $migrationOutput = 'ERROR: ' . $e->getMessage();
-            \Log::error('[SyncPush] Auto-migration failed: ' . $e->getMessage());
+            \Log::warning('[SyncPush] Schema setup warning: ' . $e->getMessage());
         }
 
         $storeCode = $request->input('store_code');
@@ -269,7 +284,6 @@ class SyncController extends Controller
             'synced_transactions' => $savedTransactionIds,
             'synced_contacts' => $savedContactIds,
             'synced_products' => $savedProductIds,
-            'migration_output' => $migrationOutput,
             'debug_logs' => $debugLogs
         ]);
     }
@@ -342,14 +356,15 @@ class SyncController extends Controller
         }
 
         // 3. Fetch local unsynced products with their variations and product variations
-        $unsyncedProducts = \App\Product::where('is_synced', false)->get();
         $productsPayload = [];
-
-        foreach ($unsyncedProducts as $p) {
-            $pArr = $p->toArray();
-            $pArr['variations'] = $p->variations->toArray();
-            $pArr['product_variations'] = $p->product_variations->toArray();
-            $productsPayload[] = $pArr;
+        if (Schema::hasColumn('products', 'is_synced')) {
+            $unsyncedProducts = \App\Product::where('is_synced', false)->get();
+            foreach ($unsyncedProducts as $p) {
+                $pArr = $p->toArray();
+                $pArr['variations'] = $p->variations->toArray();
+                $pArr['product_variations'] = $p->product_variations->toArray();
+                $productsPayload[] = $pArr;
+            }
         }
 
         try {

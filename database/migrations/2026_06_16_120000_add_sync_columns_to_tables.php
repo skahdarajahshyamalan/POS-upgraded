@@ -13,20 +13,26 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::table('transactions', function (Blueprint $table) {
-            $table->boolean('is_synced')->default(false)->after('id');
-            $table->string('store_code')->nullable()->after('is_synced');
-        });
+        if (!Schema::hasColumn('transactions', 'is_synced')) {
+            Schema::table('transactions', function (Blueprint $table) {
+                $table->boolean('is_synced')->default(false)->after('id');
+                $table->string('store_code')->nullable()->after('is_synced');
+            });
+        }
 
-        Schema::table('contacts', function (Blueprint $table) {
-            $table->boolean('is_synced')->default(false)->after('id');
-            $table->string('store_code')->nullable()->after('is_synced');
-        });
+        if (!Schema::hasColumn('contacts', 'is_synced')) {
+            Schema::table('contacts', function (Blueprint $table) {
+                $table->boolean('is_synced')->default(false)->after('id');
+                $table->string('store_code')->nullable()->after('is_synced');
+            });
+        }
 
-        Schema::table('business', function (Blueprint $table) {
-            $table->text('productcatalogue_settings')->nullable();
-            $table->text('repair_settings')->nullable();
-        });
+        if (!Schema::hasColumn('business', 'productcatalogue_settings')) {
+            Schema::table('business', function (Blueprint $table) {
+                $table->text('productcatalogue_settings')->nullable();
+                $table->text('repair_settings')->nullable();
+            });
+        }
     }
 
     /**
