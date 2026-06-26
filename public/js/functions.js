@@ -460,6 +460,11 @@ function __datatable_ajax_callback(data){
 
 //Confirmation before page load.
 function __page_leave_confirmation(form) {
+    // If running inside Electron desktop app, disable beforeunload confirmation entirely to prevent navigation locks
+    if (navigator.userAgent.toLowerCase().indexOf('electron') > -1) {
+        return;
+    }
+
     var form_obj = $(form);
     var orig_form_data = form_obj.serialize();
 

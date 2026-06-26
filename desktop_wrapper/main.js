@@ -268,6 +268,12 @@ function createMainWindow() {
         mainWindow.webContents.send('app-info', { isPackaged: app.isPackaged });
     });
 
+    // Failsafe: clear any onbeforeunload handler before every navigation
+    // This prevents form page-leave confirmations from silently blocking sidebar route changes
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        mainWindow.webContents.executeJavaScript('window.onbeforeunload = null;').catch(() => {});
+    });
+
     // Forward renderer console messages to main process terminal stdout
     mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
         console.log(`[Renderer Console] ${message} (at ${path.basename(sourceId)}:${line})`);
