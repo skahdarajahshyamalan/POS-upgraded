@@ -27,6 +27,7 @@ class SyncController extends Controller
         $storeCode = $request->input('store_code');
         $transactions = $request->input('transactions', []);
         $contacts = $request->input('contacts', []);
+        $products = $request->input('products', []);
 
         if (empty($storeCode)) {
             return response()->json(['success' => false, 'message' => 'Store code required'], 400);
@@ -39,6 +40,7 @@ class SyncController extends Controller
 
         $savedTransactionIds = [];
         $savedContactIds = [];
+        $savedProductIds = [];
 
         // Disable FK checks during push to avoid foreign key violations (e.g. missing users/locations on cloud)
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
@@ -174,12 +176,74 @@ class SyncController extends Controller
             }
         }
 
+        // 3. Sync Products
+        foreach ($products as $p) {
+            DB::beginTransaction();
+            try {
+                // Prevent duplicate by checking SKU
+                $product = \App\Product::where('sku', $p['sku'])->first();
+
+                if ($product) {
+                    $product->variations()->delete();
+                    $product->product_variations()->delete();
+                } else {
+                    $product = new \App\Product();
+                }
+
+                $product->fill($p);
+                $product->store_code = $storeCode;
+                $product->business_id = $businessId;
+                $product->is_synced = true;
+                $product->save();
+
+                // Sync product variations
+                $pvMap = [];
+                if (!empty($p['product_variations'])) {
+                    foreach ($p['product_variations'] as $pv) {
+                        $prodVar = new \App\ProductVariation();
+                        $prodVar->fill($pv);
+                        $prodVar->product_id = $product->id;
+                        $prodVar->save();
+                        $pvMap[$pv['id']] = $prodVar->id;
+                    }
+                }
+
+                // Sync variations
+                if (!empty($p['variations'])) {
+                    foreach ($p['variations'] as $v) {
+                        $variation = new \App\Variation();
+                        $variation->fill($v);
+                        $variation->product_id = $product->id;
+                        if (!empty($v['product_variation_id']) && isset($pvMap[$v['product_variation_id']])) {
+                            $variation->product_variation_id = $pvMap[$v['product_variation_id']];
+                        }
+                        $variation->save();
+                    }
+                }
+
+                // Link to business location
+                if ($locationId) {
+                    \DB::table('product_locations')->updateOrInsert(
+                        ['product_id' => $product->id, 'location_id' => $locationId],
+                        ['product_id' => $product->id, 'location_id' => $locationId]
+                    );
+                }
+
+                DB::commit();
+                $savedProductIds[] = $p['id'];
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error('[SyncPush] Product sync error: ' . $e->getMessage() . ' | Data: ' . json_encode($p));
+            }
+        }
+
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
         return response()->json([
             'success' => true,
             'synced_transactions' => $savedTransactionIds,
-            'synced_contacts' => $savedContactIds
+            'synced_contacts' => $savedContactIds,
+            'synced_products' => $savedProductIds
         ]);
     }
 
@@ -250,6 +314,17 @@ class SyncController extends Controller
             $transactionsPayload[] = $tArr;
         }
 
+        // 3. Fetch local unsynced products with their variations and product variations
+        $unsyncedProducts = \App\Product::where('is_synced', false)->get();
+        $productsPayload = [];
+
+        foreach ($unsyncedProducts as $p) {
+            $pArr = $p->toArray();
+            $pArr['variations'] = $p->variations->toArray();
+            $pArr['product_variations'] = $p->product_variations->toArray();
+            $productsPayload[] = $pArr;
+        }
+
         try {
             // Push local data
             $pushResponse = Http::withoutVerifying()
@@ -258,7 +333,8 @@ class SyncController extends Controller
                     'store_code' => $storeCode,
                     'sync_secret' => env('SYNC_SECRET', ''),
                     'contacts' => $unsyncedContacts,
-                    'transactions' => $transactionsPayload
+                    'transactions' => $transactionsPayload,
+                    'products' => $productsPayload
                 ]);
 
             if ($pushResponse->successful()) {
@@ -272,6 +348,11 @@ class SyncController extends Controller
                 // Mark successfully pushed transactions as synced and write store_code
                 if (!empty($resData['synced_transactions'])) {
                     Transaction::whereIn('id', $resData['synced_transactions'])->update(['is_synced' => true, 'store_code' => $storeCode]);
+                }
+
+                // Mark successfully pushed products as synced and write store_code
+                if (!empty($resData['synced_products'])) {
+                    \App\Product::whereIn('id', $resData['synced_products'])->update(['is_synced' => true, 'store_code' => $storeCode]);
                 }
             } else {
                 return response()->json(['success' => false, 'message' => 'Data Push failed: ' . $pushResponse->body()], 500);
