@@ -37,7 +37,7 @@ class SyncUsersFromCloud extends Command
                 ->post($endpoint, ['sync_secret' => $syncSecret]);
 
             if (!$response->successful()) {
-                $this->warn('[SyncUsers] HTTP ' . $response->status() . ': ' . $response->body());
+                $this->warn('[SyncUsers] HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 200));
                 return 0;
             }
 
@@ -48,30 +48,25 @@ class SyncUsersFromCloud extends Command
                 return 0;
             }
 
-            // Disable FK checks to allow safe upsert across related tables
+            // Disable FK checks for safe cross-table upserts
             DB::statement('SET FOREIGN_KEY_CHECKS=0');
 
-            // 0. Sync Business (needed before roles due to FK constraint)
-            foreach ($data['business'] ?? [] as $biz) {
-                $biz = (array) $biz;
-                DB::table('business')->updateOrInsert(['id' => $biz['id']], $biz);
-            }
-
             // 1. Sync Roles
+            $this->info('[SyncUsers] Syncing roles...');
             foreach ($data['roles'] ?? [] as $role) {
-                $role = (array) $role;
-                DB::table('roles')->updateOrInsert(['id' => $role['id']], $role);
+                DB::table('roles')->updateOrInsert(['id' => ((array)$role)['id']], (array)$role);
             }
 
             // 2. Sync Permissions
+            $this->info('[SyncUsers] Syncing permissions...');
             foreach ($data['permissions'] ?? [] as $perm) {
-                $perm = (array) $perm;
-                DB::table('permissions')->updateOrInsert(['id' => $perm['id']], $perm);
+                DB::table('permissions')->updateOrInsert(['id' => ((array)$perm)['id']], (array)$perm);
             }
 
             // 3. Sync Role->Permission assignments
+            $this->info('[SyncUsers] Syncing role permissions...');
             foreach ($data['role_has_permissions'] ?? [] as $rp) {
-                $rp = (array) $rp;
+                $rp = (array)$rp;
                 DB::table('role_has_permissions')->updateOrInsert(
                     ['role_id' => $rp['role_id'], 'permission_id' => $rp['permission_id']],
                     $rp
@@ -79,9 +74,10 @@ class SyncUsersFromCloud extends Command
             }
 
             // 4. Sync Users
+            $this->info('[SyncUsers] Syncing users...');
             $liveUserIds = [];
             foreach ($data['users'] ?? [] as $user) {
-                $user = (array) $user;
+                $user = (array)$user;
                 $liveUserIds[] = $user['id'];
                 DB::table('users')->updateOrInsert(['id' => $user['id']], $user);
             }
@@ -94,10 +90,11 @@ class SyncUsersFromCloud extends Command
                     ->update(['deleted_at' => now(), 'status' => 'inactive']);
             }
 
-            // Fix business_id: if synced user's business doesn't exist locally, assign to business 1
-            DB::statement("UPDATE users SET business_id = 1 WHERE business_id NOT IN (SELECT id FROM business) AND deleted_at IS NULL");
+            // Force all local users to business 1 (desktop app is single-business)
+            DB::statement("UPDATE users SET business_id = 1 WHERE deleted_at IS NULL");
 
             // 5. Sync User->Role assignments
+            $this->info('[SyncUsers] Syncing user role assignments...');
             if (!empty($liveUserIds)) {
                 DB::table('model_has_roles')
                     ->where('model_type', \App\User::class)
@@ -105,10 +102,21 @@ class SyncUsersFromCloud extends Command
                     ->delete();
             }
             foreach ($data['model_has_roles'] ?? [] as $mhr) {
-                DB::table('model_has_roles')->insertOrIgnore((array) $mhr);
+                DB::table('model_has_roles')->insertOrIgnore((array)$mhr);
             }
 
+            // Remap all roles to business-1 equivalents (Admin#1 / Cashier#1)
+            // Desktop has 1 business so all roles must belong to business 1
+            DB::statement("
+                UPDATE model_has_roles mhr
+                JOIN roles r ON r.id = mhr.role_id
+                JOIN users u ON u.id = mhr.model_id AND mhr.model_type = 'App\\\\User'
+                SET mhr.role_id = IF(r.name LIKE 'Admin%', 1, 2)
+                WHERE r.business_id != 1 AND u.deleted_at IS NULL
+            ");
+
             // 6. Sync User->Permission assignments
+            $this->info('[SyncUsers] Syncing user permission assignments...');
             if (!empty($liveUserIds)) {
                 DB::table('model_has_permissions')
                     ->where('model_type', \App\User::class)
@@ -116,45 +124,13 @@ class SyncUsersFromCloud extends Command
                     ->delete();
             }
             foreach ($data['model_has_permissions'] ?? [] as $mhp) {
-                DB::table('model_has_permissions')->insertOrIgnore((array) $mhp);
+                DB::table('model_has_permissions')->insertOrIgnore((array)$mhp);
             }
-
-            // 7. Fix role-business mismatch:
-            //    After syncing, a user's role might belong to a different business
-            //    than the user's own business_id. Remap to the equivalent role in business 1.
-            $this->info('[SyncUsers] Fixing role-business mismatches...');
-            $mismatchedUsers = DB::select("
-                SELECT mhr.model_id, mhr.role_id, r.name as role_name, u.business_id
-                FROM model_has_roles mhr
-                JOIN roles r ON r.id = mhr.role_id
-                JOIN users u ON u.id = mhr.model_id
-                WHERE mhr.model_type = 'App\\\\User'
-                AND r.business_id != u.business_id
-                AND u.deleted_at IS NULL
-            ");
-
-            foreach ($mismatchedUsers as $mu) {
-                // Determine role type: Admin or Cashier
-                $roleType = str_contains($mu->role_name, 'Admin') ? 'Admin' : 'Cashier';
-                // Find the matching role for business 1
-                $localRole = DB::table('roles')
-                    ->where('business_id', $mu->business_id)
-                    ->where('name', 'like', $roleType . '#%')
-                    ->first();
-
-                if ($localRole) {
-                    DB::table('model_has_roles')
-                        ->where('model_type', \App\User::class)
-                        ->where('model_id', $mu->model_id)
-                        ->where('role_id', $mu->role_id)
-                        ->update(['role_id' => $localRole->id]);
-                }
-            }
-
-            $this->info('[SyncUsers] Done. Synced at: ' . ($data['synced_at'] ?? now()));
 
             // Re-enable FK checks
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+            $this->info('[SyncUsers] Done. Synced at: ' . ($data['synced_at'] ?? now()));
 
             try {
                 app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
