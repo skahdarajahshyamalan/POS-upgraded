@@ -258,4 +258,62 @@ class SyncController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * SYNC USERS Endpoint (Runs on Cloud/Live Server)
+     * Returns all users with hashed passwords and role assignments for desktop sync.
+     * Protected by SYNC_SECRET token.
+     */
+    public function syncUsers(Request $request)
+    {
+        try {
+            // Validate sync secret token
+            $secret = $request->header('X-Sync-Secret') ?? $request->input('sync_secret');
+            $expectedSecret = env('SYNC_SECRET', '');
+
+            if (empty($expectedSecret) || $secret !== $expectedSecret) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
+
+            // Fetch all active users with their hashed passwords
+            $users = \DB::table('users')
+                ->whereNull('deleted_at')
+                ->get();
+
+            // Fetch all roles
+            $roles = \DB::table('roles')->get();
+
+            // Fetch all model_has_roles (user → role assignments)
+            $modelHasRoles = \DB::table('model_has_roles')
+                ->where('model_type', \App\User::class)
+                ->get();
+
+            // Fetch all permissions
+            $permissions = \DB::table('permissions')->get();
+
+            // Fetch role_has_permissions
+            $roleHasPermissions = \DB::table('role_has_permissions')->get();
+
+            // Fetch model_has_permissions
+            $modelHasPermissions = \DB::table('model_has_permissions')
+                ->where('model_type', \App\User::class)
+                ->get();
+
+            return response()->json([
+                'success'               => true,
+                'users'                 => $users,
+                'roles'                 => $roles,
+                'model_has_roles'       => $modelHasRoles,
+                'permissions'           => $permissions,
+                'role_has_permissions'  => $roleHasPermissions,
+                'model_has_permissions' => $modelHasPermissions,
+                'synced_at'             => now()->toDateTimeString(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server Error: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

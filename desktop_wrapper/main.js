@@ -439,6 +439,65 @@ function runMigrationsAndSeeds() {
     });
 }
 
+// Sync users from live cloud server to local DB
+function syncUsersFromCloud() {
+    return new Promise((resolve) => {
+        const phpDir = path.join(basePath, 'bin', 'php');
+        const phpPath = path.join(phpDir, 'php.exe');
+        const srcDir = path.join(basePath, 'src');
+        const artisanPath = path.join(srcDir, 'artisan');
+
+        if (!fs.existsSync(phpPath) || !fs.existsSync(artisanPath)) {
+            console.log('[SyncUsers] PHP/artisan not found, skipping user sync.');
+            return resolve();
+        }
+
+        const syncEnv = Object.assign({}, process.env, {
+            DB_HOST: '127.0.0.1',
+            DB_PORT: '3307',
+            DB_DATABASE: getEnvValue('DB_DATABASE', 'atpoxise_posvtventsys'),
+            DB_USERNAME: getEnvValue('DB_USERNAME', 'pos_user'),
+            DB_PASSWORD: getEnvValue('DB_PASSWORD', 'pos_password'),
+            CLOUD_SERVER_URL: getEnvValue('CLOUD_SERVER_URL', ''),
+            SYNC_SECRET: getEnvValue('SYNC_SECRET', ''),
+            IS_DESKTOP_APP: 'true',
+        });
+
+        console.log('[SyncUsers] Starting user sync from live server...');
+        updateStatus('Syncing users...');
+
+        const syncProc = spawn(phpPath, [
+            '-d', `extension_dir=${path.join(phpDir, 'ext')}`,
+            artisanPath,
+            'pos:sync-users'
+        ], { cwd: srcDir, env: syncEnv });
+
+        syncProc.stdout.on('data', (data) => {
+            console.log(`[SyncUsers] ${data.toString().trim()}`);
+        });
+
+        syncProc.stderr.on('data', (data) => {
+            console.log(`[SyncUsers STDERR] ${data.toString().trim()}`);
+        });
+
+        syncProc.on('close', (code) => {
+            console.log(`[SyncUsers] Sync finished with code: ${code}`);
+            resolve(); // Always resolve — sync failure should not block app startup
+        });
+
+        syncProc.on('error', (err) => {
+            console.error('[SyncUsers] Failed to start sync process:', err);
+            resolve(); // Graceful fallback
+        });
+
+        // Timeout safety — resolve after 15s even if sync hangs
+        setTimeout(() => {
+            console.warn('[SyncUsers] Sync timeout — continuing app startup.');
+            resolve();
+        }, 15000);
+    });
+}
+
 let activationWindow;
 
 function createActivationWindow() {
@@ -532,6 +591,9 @@ function startAppServices() {
             .then(() => {
                 updateStatus('Installing local databases...');
                 return runMigrationsAndSeeds();
+            })
+            .then(() => {
+                return syncUsersFromCloud();
             });
     } else {
         console.log(`Using external database connection: ${DB_HOST_ENV}:${DB_PORT_ENV}. Skipping local database startup and migrations.`);
