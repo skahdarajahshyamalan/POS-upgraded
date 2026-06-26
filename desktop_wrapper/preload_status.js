@@ -104,6 +104,7 @@ let lastSyncData = { status: 'idle', file: '' };
 // Database sync status variables
 let dbSyncStatus = { status: 'idle', message: 'Sync Database' };
 let isSyncing = false;
+let applySyncUI = () => {};
 
 function showDBSyncStatus(status, message) {
     dbSyncStatus = { status, message };
@@ -341,7 +342,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    function applySyncUI() {
+    applySyncUI = function() {
         const syncText = document.getElementById('sync-text');
         const syncIcon = document.getElementById('sync-icon');
         const syncIndicator = document.getElementById('sync-indicator');
@@ -464,6 +465,23 @@ window.addEventListener('DOMContentLoaded', () => {
     
     window.addEventListener('offline', updateOnlineStatus);
     setInterval(updateOnlineStatus, 8000);
+
+    // Auto-sync 3 seconds after page load if online
+    setTimeout(() => {
+        if (navigator.onLine && !isSyncing) {
+            console.log('[Preload Status] Page load database auto-sync...');
+            triggerDatabaseSync();
+        }
+    }, 3000);
+
+    // Periodic auto-sync every 30 seconds if online
+    setInterval(() => {
+        if (navigator.onLine && !isSyncing) {
+            console.log('[Preload Status] Periodic database auto-sync...');
+            triggerDatabaseSync();
+        }
+    }, 30000);
+
 
     // Listeners for IPC Sync / Info
     ipcRenderer.on('app-info', (event, info) => {

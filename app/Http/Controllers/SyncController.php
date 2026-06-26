@@ -40,6 +40,9 @@ class SyncController extends Controller
         $savedTransactionIds = [];
         $savedContactIds = [];
 
+        // Disable FK checks during push to avoid foreign key violations (e.g. missing users/locations on cloud)
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
         // 1. Sync Contacts
         foreach ($contacts as $c) {
             DB::beginTransaction();
@@ -171,6 +174,8 @@ class SyncController extends Controller
             }
         }
 
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
         return response()->json([
             'success' => true,
             'synced_transactions' => $savedTransactionIds,
@@ -259,14 +264,14 @@ class SyncController extends Controller
             if ($pushResponse->successful()) {
                 $resData = $pushResponse->json();
                 
-                // Mark successfully pushed contacts as synced
+                // Mark successfully pushed contacts as synced and write store_code
                 if (!empty($resData['synced_contacts'])) {
-                    Contact::whereIn('id', $resData['synced_contacts'])->update(['is_synced' => true]);
+                    Contact::whereIn('id', $resData['synced_contacts'])->update(['is_synced' => true, 'store_code' => $storeCode]);
                 }
 
-                // Mark successfully pushed transactions as synced
+                // Mark successfully pushed transactions as synced and write store_code
                 if (!empty($resData['synced_transactions'])) {
-                    Transaction::whereIn('id', $resData['synced_transactions'])->update(['is_synced' => true]);
+                    Transaction::whereIn('id', $resData['synced_transactions'])->update(['is_synced' => true, 'store_code' => $storeCode]);
                 }
             } else {
                 return response()->json(['success' => false, 'message' => 'Data Push failed: ' . $pushResponse->body()], 500);
@@ -283,11 +288,16 @@ class SyncController extends Controller
             if ($pullResponse->successful()) {
                 $pullData = $pullResponse->json();
 
+                // Disable FK checks to avoid products foreign key constraint error with created_by/tax/etc
+                DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
                 // Upsert products locally
                 foreach ($pullData['products'] as $p) {
                     $pArray = (array)$p;
                     DB::table('products')->updateOrInsert(['id' => $pArray['id']], $pArray);
                 }
+
+                DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
                 // Update last sync time
                 DB::table('system')->updateOrInsert(
