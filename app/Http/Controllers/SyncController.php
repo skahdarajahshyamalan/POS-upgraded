@@ -25,9 +25,12 @@ class SyncController extends Controller
         }
 
         // Auto-run migrations on the cloud server to ensure sync columns/tables are up to date
+        $migrationOutput = '';
         try {
             \Artisan::call('migrate', ['--force' => true]);
+            $migrationOutput = \Artisan::output();
         } catch (\Exception $e) {
+            $migrationOutput = 'ERROR: ' . $e->getMessage();
             \Log::error('[SyncPush] Auto-migration failed: ' . $e->getMessage());
         }
 
@@ -266,6 +269,7 @@ class SyncController extends Controller
             'synced_transactions' => $savedTransactionIds,
             'synced_contacts' => $savedContactIds,
             'synced_products' => $savedProductIds,
+            'migration_output' => $migrationOutput,
             'debug_logs' => $debugLogs
         ]);
     }
